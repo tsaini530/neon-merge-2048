@@ -8,6 +8,7 @@ import {
   AUDIO_KEYS,
 } from '../config/constants.js';
 import ytService from '../sdk/ytService.js';
+import playgamaService from '../sdk/playgamaService.js';
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -58,8 +59,9 @@ export class BootScene extends Phaser.Scene {
     });
 
     this.load.on('complete', () => {
-      // Signal first frame rendered to YouTube Playables SDK
+      // Signal first frame rendered to YouTube Playables SDK & Playgama Bridge
       ytService.firstFrameReady();
+      playgamaService.sendGameReady();
     });
   }
 

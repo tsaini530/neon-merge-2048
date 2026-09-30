@@ -1,12 +1,14 @@
 /**
  * Playgama Bridge SDK Integration Service (v2.x)
- * Handles cross-platform lifecycle, storage, audio sync, and ads.
+ * Fully bundled with @playgama/bridge for offline and sandbox readiness.
  */
+import bridge, { PLATFORM_MESSAGE, EVENT_NAME } from '@playgama/bridge';
 
 class PlaygamaService {
   constructor() {
-    this.bridge = typeof window !== 'undefined' ? window.bridge : null;
+    this.bridge = bridge;
     this.isInitialized = false;
+    this.initPromise = null;
     this.audioEnabled = true;
     this.isPaused = false;
     this.gameInstance = null;
@@ -19,60 +21,61 @@ class PlaygamaService {
    * Initialize Playgama Bridge SDK
    */
   async init() {
-    if (this.isInitialized) return true;
+    if (this.initPromise) return this.initPromise;
 
-    if (typeof window !== 'undefined' && window.bridge) {
-      this.bridge = window.bridge;
+    this.initPromise = (async () => {
       try {
-        await this.bridge.initialize();
+        console.log('[PlaygamaBridge] Initializing Playgama Bridge SDK...');
+        await bridge.initialize();
         this.isInitialized = true;
-        console.log('[PlaygamaBridge] Initialized successfully. Platform:', this.bridge.platform?.id);
+        console.log('[PlaygamaBridge] Initialized successfully. Platform:', bridge.platform?.id);
 
         // Initial audio check
-        if (this.bridge.platform && typeof this.bridge.platform.isAudioEnabled !== 'undefined') {
-          this.audioEnabled = Boolean(this.bridge.platform.isAudioEnabled);
+        if (bridge.platform && typeof bridge.platform.isAudioEnabled !== 'undefined') {
+          this.audioEnabled = Boolean(bridge.platform.isAudioEnabled);
         }
 
         // Listen for audio state changes
-        if (this.bridge.EVENT_NAME?.AUDIO_STATE_CHANGED) {
-          this.bridge.platform.on(this.bridge.EVENT_NAME.AUDIO_STATE_CHANGED, (isEnabled) => {
-            console.log('[PlaygamaBridge] Audio state changed:', isEnabled);
-            this.audioEnabled = Boolean(isEnabled);
-            this._syncPhaserAudio();
-            this.audioListeners.forEach((fn) => fn(this.audioEnabled));
-          });
-        }
+        bridge.platform?.on?.(EVENT_NAME.AUDIO_STATE_CHANGED, (isEnabled) => {
+          console.log('[PlaygamaBridge] Audio state changed:', isEnabled);
+          this.audioEnabled = Boolean(isEnabled);
+          this._syncPhaserAudio();
+          this.audioListeners.forEach((fn) => fn(this.audioEnabled));
+        });
 
         // Listen for pause state changes
-        if (this.bridge.EVENT_NAME?.PAUSE_STATE_CHANGED) {
-          this.bridge.platform.on(this.bridge.EVENT_NAME.PAUSE_STATE_CHANGED, (isPaused) => {
-            console.log('[PlaygamaBridge] Pause state changed:', isPaused);
-            this.isPaused = Boolean(isPaused);
-            if (this.isPaused) {
-              if (this.gameInstance) {
-                this.gameInstance.scene.pause();
-                if (this.gameInstance.sound) this.gameInstance.sound.pauseAll();
-              }
-              this.pauseListeners.forEach((fn) => fn());
-            } else {
-              if (this.gameInstance) {
-                this.gameInstance.scene.resume();
-                if (this.gameInstance.sound && this.audioEnabled) this.gameInstance.sound.resumeAll();
-              }
-              this.resumeListeners.forEach((fn) => fn());
+        bridge.platform?.on?.(EVENT_NAME.PAUSE_STATE_CHANGED, (isPaused) => {
+          console.log('[PlaygamaBridge] Pause state changed:', isPaused);
+          this.isPaused = Boolean(isPaused);
+          if (this.isPaused) {
+            if (this.gameInstance) {
+              this.gameInstance.scene.pause();
+              if (this.gameInstance.sound) this.gameInstance.sound.pauseAll();
             }
-          });
+            this.pauseListeners.forEach((fn) => fn());
+          } else {
+            if (this.gameInstance) {
+              this.gameInstance.scene.resume();
+              if (this.gameInstance.sound && this.audioEnabled) this.gameInstance.sound.resumeAll();
+            }
+            this.resumeListeners.forEach((fn) => fn());
+          }
+        });
+
+        // Report 100% loading progress and game ready immediately upon initialization
+        if (typeof bridge.setGameLoadingProgress === 'function') {
+          bridge.setGameLoadingProgress(100);
         }
+        await this.sendGameReady();
 
         return true;
       } catch (err) {
         console.warn('[PlaygamaBridge] Initialization error:', err);
         return false;
       }
-    } else {
-      console.log('[PlaygamaBridge] Running in standalone/fallback mode.');
-      return false;
-    }
+    })();
+
+    return this.initPromise;
   }
 
   bindGame(game) {
@@ -87,17 +90,30 @@ class PlaygamaService {
   }
 
   /**
-   * Signal first frame / gameplay ready
+   * Signal first frame / gameplay ready (Mandatory for Playgama Sandbox & Moderation)
    */
-  sendGameReady() {
-    if (this.bridge?.platform?.sendMessage) {
-      try {
-        this.bridge.platform.sendMessage('game_ready')
-          .then(() => console.log('[PlaygamaBridge] game_ready message sent'))
-          .catch((e) => console.warn('[PlaygamaBridge] game_ready message error:', e));
-      } catch (e) {
-        console.warn('[PlaygamaBridge] sendGameReady failed:', e);
+  async sendGameReady() {
+    try {
+      if (!this.isInitialized && this.initPromise) {
+        await this.initPromise;
       }
+
+      if (typeof bridge.setGameLoadingProgress === 'function') {
+        bridge.setGameLoadingProgress(100);
+      }
+
+      console.log('[PlaygamaBridge] Sending game_ready message to platform...');
+      if (bridge.platform && typeof bridge.platform.sendMessage === 'function') {
+        await bridge.platform.sendMessage(PLATFORM_MESSAGE.GAME_READY);
+        console.log('[PlaygamaBridge] game_ready confirmed via bridge.platform.sendMessage!');
+      }
+
+      if (typeof window !== 'undefined' && window.PLAYGAMA_SDK?.gameService?.gameReady) {
+        window.PLAYGAMA_SDK.gameService.gameReady();
+        console.log('[PlaygamaBridge] game_ready confirmed via PLAYGAMA_SDK!');
+      }
+    } catch (e) {
+      console.warn('[PlaygamaBridge] sendGameReady failed:', e);
     }
   }
 
@@ -124,15 +140,14 @@ class PlaygamaService {
    * Show Interstitial Ad at natural break
    */
   showInterstitial(placement = 'game_over') {
-    if (this.bridge?.advertisement?.showInterstitial) {
-      try {
-        console.log('[PlaygamaBridge] Requesting interstitial ad...');
-        this.bridge.advertisement.showInterstitial(placement);
+    try {
+      if (bridge.advertisement?.isInterstitialSupported) {
+        console.log('[PlaygamaBridge] Showing interstitial ad for placement:', placement);
+        bridge.advertisement.showInterstitial(placement);
         return true;
-      } catch (err) {
-        console.warn('[PlaygamaBridge] Interstitial ad error:', err);
-        return false;
       }
+    } catch (err) {
+      console.warn('[PlaygamaBridge] Interstitial ad error:', err);
     }
     return false;
   }
@@ -141,43 +156,26 @@ class PlaygamaService {
    * Show Rewarded Ad to revive player
    */
   showRewarded() {
-    if (this.bridge?.advertisement?.showRewarded) {
-      return new Promise((resolve) => {
-        let isRewarded = false;
-
-        const unsubscribe = () => {
-          if (this.bridge?.advertisement?.off && this.bridge?.EVENT_NAME?.REWARDED_STATE_CHANGED) {
-            this.bridge.advertisement.off(this.bridge.EVENT_NAME.REWARDED_STATE_CHANGED, stateHandler);
-          }
-        };
-
-        const stateHandler = (state) => {
-          console.log('[PlaygamaBridge] Rewarded ad state:', state);
-          if (state === 'rewarded') {
-            isRewarded = true;
-          } else if (state === 'closed' || state === 'failed') {
-            unsubscribe();
-            resolve(isRewarded);
-          }
-        };
-
-        if (this.bridge.EVENT_NAME?.REWARDED_STATE_CHANGED) {
-          this.bridge.advertisement.on(this.bridge.EVENT_NAME.REWARDED_STATE_CHANGED, stateHandler);
-        }
-
-        try {
-          this.bridge.advertisement.showRewarded();
-        } catch (e) {
-          console.warn('[PlaygamaBridge] showRewarded error:', e);
-          unsubscribe();
-          resolve(false);
-        }
-      });
-    }
-
-    // Fallback simulation
     return new Promise((resolve) => {
-      setTimeout(() => resolve(true), 600);
+      let isRewarded = false;
+
+      const stateHandler = (state) => {
+        console.log('[PlaygamaBridge] Rewarded ad state:', state);
+        if (state === 'rewarded') {
+          isRewarded = true;
+        } else if (state === 'closed' || state === 'failed') {
+          bridge.advertisement.off(EVENT_NAME.REWARDED_STATE_CHANGED, stateHandler);
+          resolve(isRewarded);
+        }
+      };
+
+      try {
+        bridge.advertisement.on(EVENT_NAME.REWARDED_STATE_CHANGED, stateHandler);
+        bridge.advertisement.showRewarded();
+      } catch (e) {
+        console.warn('[PlaygamaBridge] showRewarded error:', e);
+        resolve(false);
+      }
     });
   }
 
@@ -185,31 +183,27 @@ class PlaygamaService {
    * Storage: Save player data
    */
   async saveData(dataObj) {
-    if (this.bridge?.storage?.set) {
-      try {
-        await this.bridge.storage.set(['neon_merge_data'], [JSON.stringify(dataObj)]);
-        console.log('[PlaygamaBridge] Storage save successful');
-        return true;
-      } catch (err) {
-        console.warn('[PlaygamaBridge] Storage save error:', err);
-      }
+    try {
+      await bridge.storage.set(['neon_merge_data'], [JSON.stringify(dataObj)]);
+      console.log('[PlaygamaBridge] Storage save successful');
+      return true;
+    } catch (err) {
+      console.warn('[PlaygamaBridge] Storage save error:', err);
+      return false;
     }
-    return false;
   }
 
   /**
    * Storage: Load player data
    */
   async loadData() {
-    if (this.bridge?.storage?.get) {
-      try {
-        const result = await this.bridge.storage.get(['neon_merge_data']);
-        if (result && result[0]) {
-          return JSON.parse(result[0]);
-        }
-      } catch (err) {
-        console.warn('[PlaygamaBridge] Storage load error:', err);
+    try {
+      const result = await bridge.storage.get(['neon_merge_data']);
+      if (result && result[0]) {
+        return JSON.parse(result[0]);
       }
+    } catch (err) {
+      console.warn('[PlaygamaBridge] Storage load error:', err);
     }
     return null;
   }
