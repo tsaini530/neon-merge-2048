@@ -59,9 +59,8 @@ export class BootScene extends Phaser.Scene {
     });
 
     this.load.on('complete', () => {
-      // Signal first frame rendered to YouTube Playables SDK & Playgama Bridge
+      // Signal first visual frame rendered to YouTube Playables SDK
       ytService.firstFrameReady();
-      playgamaService.sendGameReady();
     });
   }
 
@@ -93,15 +92,23 @@ export class BootScene extends Phaser.Scene {
     this.progressBar = this.add.graphics();
   }
 
-  create() {
+  async create() {
     // Generate all procedural neon textures into TextureManager
     this._generateBlockTextures();
     this._generateParticleTextures();
     this._generateGridTextures();
 
-    // Transition to MainScene
-    this.time.delayedCall(150, () => {
-      this.scene.start('MainScene');
+    // Fetch saved player progress from Cloud Storage (Required by Playgama before gameplay starts)
+    let savedData = await playgamaService.loadData();
+    if (!savedData) {
+      savedData = await ytService.loadData();
+    }
+
+    console.log('[BootScene] Preloaded saved progress:', savedData);
+
+    // Transition to MainScene with preloaded data
+    this.time.delayedCall(50, () => {
+      this.scene.start('MainScene', { savedData });
     });
   }
 

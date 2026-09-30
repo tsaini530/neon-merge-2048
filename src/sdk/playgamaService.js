@@ -180,31 +180,117 @@ class PlaygamaService {
   }
 
   /**
-   * Storage: Save player data
+   * Storage: Save player data (Cloud Save)
    */
   async saveData(dataObj) {
+    if (!dataObj || typeof dataObj !== 'object') return false;
+
+    // Local fallback persistence
     try {
-      await bridge.storage.set(['neon_merge_data'], [JSON.stringify(dataObj)]);
-      console.log('[PlaygamaBridge] Storage save successful');
-      return true;
+      localStorage.setItem('neon_merge_2048_data', JSON.stringify(dataObj));
+    } catch (_) {}
+
+    try {
+      if (!this.isInitialized && this.initPromise) {
+        await this.initPromise;
+      }
+
+      if (bridge.storage && typeof bridge.storage.set === 'function') {
+        const keys = ['neon_merge_data', 'score', 'best_score', 'coins', 'level'];
+        const values = [
+          JSON.stringify(dataObj),
+          Number(dataObj.score) || 0,
+          Number(dataObj.bestScore) || 0,
+          Number(dataObj.coins) || 0,
+          Number(dataObj.nextMilestone) || 128,
+        ];
+        await bridge.storage.set(keys, values);
+        console.log('[PlaygamaBridge] Cloud storage save successful:', {
+          score: dataObj.score,
+          coins: dataObj.coins,
+          bestScore: dataObj.bestScore,
+        });
+        return true;
+      }
     } catch (err) {
       console.warn('[PlaygamaBridge] Storage save error:', err);
-      return false;
     }
+    return false;
   }
 
   /**
-   * Storage: Load player data
+   * Storage: Load player data (Cloud Save)
    */
   async loadData() {
     try {
-      const result = await bridge.storage.get(['neon_merge_data']);
-      if (result && result[0]) {
-        return JSON.parse(result[0]);
+      if (!this.isInitialized && this.initPromise) {
+        await this.initPromise;
+      }
+
+      if (bridge.storage && typeof bridge.storage.get === 'function') {
+        console.log('[PlaygamaBridge] Fetching saved progress from storage...');
+        const keys = ['neon_merge_data', 'score', 'best_score', 'coins', 'level'];
+        const result = await bridge.storage.get(keys);
+        console.log('[PlaygamaBridge] Raw storage get result:', result);
+
+        if (result && Array.isArray(result)) {
+          let saved = null;
+          const raw = result[0];
+
+          // 1. If SDK already parsed it to an Object
+          if (raw && typeof raw === 'object') {
+            saved = { ...raw };
+          } else if (typeof raw === 'string' && raw.trim() !== '') {
+            try {
+              saved = JSON.parse(raw);
+            } catch (parseErr) {
+              console.warn('[PlaygamaBridge] Error parsing JSON string:', parseErr);
+            }
+          }
+
+          // 2. Check individual key fallbacks
+          const score = result[1];
+          const bestScore = result[2];
+          const coins = result[3];
+          const level = result[4];
+
+          if (score !== null && score !== undefined && !isNaN(Number(score))) {
+            if (!saved) saved = {};
+            if (saved.score === undefined) saved.score = Number(score);
+          }
+          if (bestScore !== null && bestScore !== undefined && !isNaN(Number(bestScore))) {
+            if (!saved) saved = {};
+            if (saved.bestScore === undefined) saved.bestScore = Number(bestScore);
+          }
+          if (coins !== null && coins !== undefined && !isNaN(Number(coins))) {
+            if (!saved) saved = {};
+            if (saved.coins === undefined) saved.coins = Number(coins);
+          }
+          if (level !== null && level !== undefined && !isNaN(Number(level))) {
+            if (!saved) saved = {};
+            if (saved.nextMilestone === undefined) saved.nextMilestone = Number(level);
+          }
+
+          if (saved && (saved.score !== undefined || saved.coins !== undefined || saved.bestScore !== undefined)) {
+            console.log('[PlaygamaBridge] Player progress successfully loaded from cloud storage:', saved);
+            return saved;
+          }
+        }
       }
     } catch (err) {
-      console.warn('[PlaygamaBridge] Storage load error:', err);
+      console.warn('[PlaygamaBridge] Cloud storage load error:', err);
     }
+
+    // Local fallback
+    try {
+      const raw = localStorage.getItem('neon_merge_2048_data');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        console.log('[PlaygamaBridge] Loaded progress from local fallback:', parsed);
+        return parsed;
+      }
+    } catch (_) {}
+
     return null;
   }
 }

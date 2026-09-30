@@ -29,7 +29,9 @@ export class MainScene extends Phaser.Scene {
     super({ key: 'MainScene' });
   }
 
-  create() {
+  create(data) {
+    const savedData = data?.savedData || null;
+
     this.score = 0;
     this.bestScore = 0;
     this.coins = 100;
@@ -64,10 +66,13 @@ export class MainScene extends Phaser.Scene {
     // 6. Setup Controls (Drag-to-aim, Tap-to-fire, Hammer Tool)
     this._setupControls();
 
-    // 7. Load Cloud Data & Start Game
-    this._loadSavedDataAndStart();
+    // 7. Apply Preloaded Cloud/Storage Progress Synchronously BEFORE gameplay starts
+    this._applySavedData(savedData);
+    if (!savedData) {
+      this._saveGameState();
+    }
 
-    // 8. YouTube Playables & Playgama gameReady() Lifecycle Signal
+    // 8. YouTube Playables & Playgama gameReady() Lifecycle Signal (Dispatched after progress is restored)
     ytService.gameReady();
     playgamaService.sendGameReady();
 
@@ -889,6 +894,8 @@ export class MainScene extends Phaser.Scene {
     this.isInputActive = false;
     this.shooter.hideAim();
 
+    this._saveGameState();
+
     this.events.emit('play-sound', AUDIO_KEYS.GAMEOVER, { volume: 0.9 });
     this.cameras.main.shake(300, 0.015);
 
@@ -954,11 +961,7 @@ export class MainScene extends Phaser.Scene {
     this._saveGameState();
   }
 
-  async _loadSavedDataAndStart() {
-    let data = await ytService.loadData();
-    if (!data) {
-      data = await playgamaService.loadData();
-    }
+  _applySavedData(data) {
     if (data && typeof data === 'object') {
       this.bestScore = data.bestScore || 0;
       this.bestText.setText(`★ BEST: ${this.bestScore.toLocaleString()}`);
