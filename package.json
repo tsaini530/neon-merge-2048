@@ -1,0 +1,20 @@
+{
+  "name": "neon-merge-2048",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Neon Merge 2048: Column Shooter - YouTube Playables Game",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "node generate-assets.js && node generate-sprites.js && vite build",
+    "package": "npm run build && rm -f neon-merge-2048.zip && cd dist && zip -r ../neon-merge-2048.zip . -x '*.DS_Store'",
+    "preview": "vite preview",
+    "generate-assets": "node generate-assets.js && node generate-sprites.js"
+  },
+  "dependencies": {
+    "phaser": "^3.87.0"
+  },
+  "devDependencies": {
+    "vite": "^5.4.14"
+  }
+}
