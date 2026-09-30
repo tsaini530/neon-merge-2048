@@ -12,6 +12,7 @@
     "generate-assets": "node generate-assets.js && node generate-sprites.js"
   },
   "dependencies": {
+    "@playgama/bridge": "^2.3.0",
     "phaser": "^3.87.0"
   },
   "devDependencies": {

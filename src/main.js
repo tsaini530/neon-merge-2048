@@ -6,6 +6,7 @@ import PauseScene from './scenes/PauseScene.js';
 import ShopScene from './scenes/ShopScene.js';
 import GameOverScene from './scenes/GameOverScene.js';
 import ytService from './sdk/ytService.js';
+import playgamaService from './sdk/playgamaService.js';
 
 const config = {
   type: Phaser.AUTO,
@@ -29,7 +30,9 @@ const config = {
 
 const game = new Phaser.Game(config);
 
-// Bind YouTube Playables SDK to Phaser game instance
+// Bind SDKs to Phaser game instance
 ytService.bindGame(game);
+playgamaService.bindGame(game);
+playgamaService.init();
 
 export default game;

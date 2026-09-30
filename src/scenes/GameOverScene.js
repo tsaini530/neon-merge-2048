@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT, AUDIO_KEYS, NEON_COLORS, POWERUP_COSTS } from '../config/constants.js';
 import ytService from '../sdk/ytService.js';
+import playgamaService from '../sdk/playgamaService.js';
 
 export class GameOverScene extends Phaser.Scene {
   constructor() {
@@ -16,8 +17,9 @@ export class GameOverScene extends Phaser.Scene {
   }
 
   create() {
-    // Interstitial ad breakpoint on game over as per YouTube Playables guidelines
+    // Interstitial ad breakpoint on game over
     ytService.requestInterstitialAd();
+    playgamaService.showInterstitial('game_over');
 
     // Play dramatic Game Over audio sequence or High Score celebration!
     const isNewRecord = this.score > 0 && this.score >= this.bestScore;
@@ -263,7 +265,12 @@ export class GameOverScene extends Phaser.Scene {
     }
 
     console.log('[GameOverScene] Requesting Rewarded Ad for Revive...');
-    const rewarded = await ytService.requestRewardedAd();
+    let rewarded = false;
+    if (ytService.isPlayablesEnv) {
+      rewarded = await ytService.requestRewardedAd();
+    } else {
+      rewarded = await playgamaService.showRewarded();
+    }
     if (rewarded) {
       this._playSound(AUDIO_KEYS.POWERUP, { volume: 0.8 });
       this.scene.stop();

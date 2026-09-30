@@ -22,6 +22,7 @@ import { GameSettings } from '../config/gameSettings.js';
 import { GridManager } from '../objects/GridManager.js';
 import { Shooter } from '../objects/Shooter.js';
 import ytService from '../sdk/ytService.js';
+import playgamaService from '../sdk/playgamaService.js';
 
 export class MainScene extends Phaser.Scene {
   constructor() {
@@ -66,11 +67,16 @@ export class MainScene extends Phaser.Scene {
     // 7. Load Cloud Data & Start Game
     this._loadSavedDataAndStart();
 
-    // 8. YouTube Playables gameReady() Lifecycle Signal
+    // 8. YouTube Playables & Playgama gameReady() Lifecycle Signal
     ytService.gameReady();
+    playgamaService.sendGameReady();
 
     // Auto-save and pause on system blur/pause
     ytService.onPause(() => {
+      this._saveGameState();
+      this.pauseGame();
+    });
+    playgamaService.onPause(() => {
       this._saveGameState();
       this.pauseGame();
     });
@@ -949,7 +955,10 @@ export class MainScene extends Phaser.Scene {
   }
 
   async _loadSavedDataAndStart() {
-    const data = await ytService.loadData();
+    let data = await ytService.loadData();
+    if (!data) {
+      data = await playgamaService.loadData();
+    }
     if (data && typeof data === 'object') {
       this.bestScore = data.bestScore || 0;
       this.bestText.setText(`★ BEST: ${this.bestScore.toLocaleString()}`);
@@ -988,7 +997,7 @@ export class MainScene extends Phaser.Scene {
   }
 
   _saveGameState() {
-    ytService.saveData({
+    const payload = {
       score: this.score,
       bestScore: this.bestScore,
       coins: this.coins,
@@ -996,7 +1005,9 @@ export class MainScene extends Phaser.Scene {
       hammerCount: this.hammerCount,
       grid: this.gridManager.serialize(),
       timestamp: Date.now(),
-    });
+    };
+    ytService.saveData(payload);
+    playgamaService.saveData(payload);
   }
 }
 
