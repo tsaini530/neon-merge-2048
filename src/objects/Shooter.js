@@ -303,8 +303,14 @@ export class Shooter extends Phaser.GameObjects.Container {
       this.ghostBlock = null;
     }
 
-    const val1 = GameSettings.getRandomBlockValue(maxBoardValue);
-    const val2 = GameSettings.getRandomBlockValue(maxBoardValue);
+    let val1 = GameSettings.getRandomBlockValue(maxBoardValue);
+    let val2 = GameSettings.getRandomBlockValue(maxBoardValue);
+
+    // First shot guaranteed hook: match the 4 in center column
+    if (this.scene.score === 0) {
+      val1 = 4;
+      val2 = 2;
+    }
 
     // Initial position at center column (col 2)
     this.activeCol = 2;

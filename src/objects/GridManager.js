@@ -49,7 +49,10 @@ export class GridManager {
         // Leave a couple random empty gaps for interesting puzzle setup
         if (r === 2 && Math.random() < 0.35) continue;
 
-        const val = initialValues[Math.floor(Math.random() * initialValues.length)];
+        let val = initialValues[Math.floor(Math.random() * initialValues.length)];
+        // Guarantee column 2 has a 4 for the initial first merge hook
+        if (c === 2) val = 4;
+
         const pos = GameSettings.getCellPosition(c, r);
         const block = new Block(this.scene, pos.x, pos.y, val);
         block.col = c;
@@ -57,6 +60,12 @@ export class GridManager {
         block.spawnPop();
         this.grid[r][c] = block;
       }
+    }
+
+    // Ensure the bottom-most block in column 2 is definitely a 4
+    const landingRow = this.getLandingRow(2);
+    if (landingRow > 0 && this.grid[landingRow - 1][2]) {
+      this.grid[landingRow - 1][2].setValue(4);
     }
   }
 

@@ -43,6 +43,9 @@ export class MainScene extends Phaser.Scene {
     this.isHammerMode = false;
     this.hammerCount = 1;
     this.nextHammerScoreThreshold = 6000;
+    this.howToPlayModal = null;
+    this.tutorialContainer = null;
+    this.isTutorialDismissed = false;
 
     // 1. Setup Background & Neon Grid
     this._createBackground();
@@ -70,6 +73,11 @@ export class MainScene extends Phaser.Scene {
     this._applySavedData(savedData);
     if (!savedData) {
       this._saveGameState();
+    }
+
+    // 7b. Launch FTUE visual guide if score is 0 (First Time User Experience)
+    if (this.score === 0) {
+      this._createTutorial();
     }
 
     // 8. YouTube Playables & Playgama gameReady() Lifecycle Signal (Dispatched after progress is restored)
@@ -176,30 +184,54 @@ export class MainScene extends Phaser.Scene {
   _createHUD() {
     const topBarY = 52;
 
-    // 1. Top-Left: PAUSE / MENU Button ("||")
-    this.pauseBtn = this.add.container(85, topBarY);
+    // 1. Top-Left: PAUSE Button ("||")
+    this.pauseBtn = this.add.container(54, topBarY);
     const pBg = this.add.graphics();
     pBg.fillStyle(0x0e1329, 0.95);
     pBg.lineStyle(2, 0x00f0ff, 0.85);
-    pBg.fillRoundedRect(-28, -28, 56, 56, 14);
-    pBg.strokeRoundedRect(-28, -28, 56, 56, 14);
+    pBg.fillRoundedRect(-22, -22, 44, 44, 12);
+    pBg.strokeRoundedRect(-22, -22, 44, 44, 12);
     this.pauseBtn.add(pBg);
 
     const pIcon = this.add.text(0, 0, '❚❚', {
       fontFamily: '"Arial Black", sans-serif',
-      fontSize: '20px',
+      fontSize: '16px',
       color: '#00f0ff',
       fontStyle: 'bold',
     }).setOrigin(0.5);
     this.pauseBtn.add(pIcon);
 
-    // Dedicated top-depth touch hit area covering entire top-left region
-    const pauseHit = this.add.rectangle(85, topBarY, 110, 84, 0x000000, 0);
+    const pauseHit = this.add.rectangle(54, topBarY, 56, 56, 0x000000, 0);
     pauseHit.setDepth(50);
     pauseHit.setInteractive({ useHandCursor: true });
     pauseHit.on('pointerdown', (pointer) => {
       if (pointer && pointer.event) pointer.event.stopPropagation();
       this.pauseGame();
+    });
+
+    // 1b. Top-Left (Next to Pause): HOW TO PLAY ("?") Button
+    this.helpBtn = this.add.container(116, topBarY);
+    const helpBg = this.add.graphics();
+    helpBg.fillStyle(0x0e1329, 0.95);
+    helpBg.lineStyle(2, 0x39ff14, 0.85);
+    helpBg.fillRoundedRect(-22, -22, 44, 44, 12);
+    helpBg.strokeRoundedRect(-22, -22, 44, 44, 12);
+    this.helpBtn.add(helpBg);
+
+    const helpIcon = this.add.text(0, 0, '?', {
+      fontFamily: '"Arial Black", sans-serif',
+      fontSize: '20px',
+      color: '#39ff14',
+      fontStyle: 'bold',
+    }).setOrigin(0.5);
+    this.helpBtn.add(helpIcon);
+
+    const helpHit = this.add.rectangle(116, topBarY, 56, 56, 0x000000, 0);
+    helpHit.setDepth(50);
+    helpHit.setInteractive({ useHandCursor: true });
+    helpHit.on('pointerdown', (pointer) => {
+      if (pointer && pointer.event) pointer.event.stopPropagation();
+      this.openHowToPlay();
     });
 
     // 2. Top-Center: Score & Best Record Capsule
@@ -244,9 +276,9 @@ export class MainScene extends Phaser.Scene {
     }).setOrigin(0.5);
     this.milestoneBadge.add(this.milestoneValText);
 
-    this.milestoneLabel = this.add.text(0, 15, 'NEXT GOAL', {
+    this.milestoneLabel = this.add.text(0, 15, this._getLevelName(this.nextMilestone), {
       fontFamily: '"Arial Black", sans-serif',
-      fontSize: '9px',
+      fontSize: '10px',
       color: '#8da2d4',
       letterSpacing: 1,
       fontStyle: 'bold',
@@ -383,6 +415,16 @@ export class MainScene extends Phaser.Scene {
     this.hammerBanner.setVisible(false);
   }
 
+  _getLevelName(milestone) {
+    if (milestone <= 64) return 'LVL 1';
+    if (milestone <= 128) return 'LVL 2';
+    if (milestone <= 256) return 'LVL 3';
+    if (milestone <= 512) return 'LVL 4';
+    if (milestone <= 1024) return 'LVL 5';
+    if (milestone <= 2048) return 'LVL 6 (CHAMP)';
+    return 'LVL 7 (MASTER)';
+  }
+
   _drawMilestoneBadge() {
     if (!this.milestoneBg) return;
     this.milestoneBg.clear();
@@ -396,6 +438,9 @@ export class MainScene extends Phaser.Scene {
 
     if (this.milestoneValText) {
       this.milestoneValText.setColor(theme.text || '#ffffff');
+    }
+    if (this.milestoneLabel) {
+      this.milestoneLabel.setText(this._getLevelName(this.nextMilestone));
     }
   }
 
@@ -422,8 +467,9 @@ export class MainScene extends Phaser.Scene {
     // Award milestone coin bonus
     this._addCoins(COIN_REWARDS.MILESTONE, GAME_WIDTH / 2, 280);
 
-    // Celebration banner
-    this._showCelebrationText(`★ UNLOCKED ${value} TILE!\n+${COIN_REWARDS.MILESTONE} COINS BONUS`);
+    // Celebration banner with Level Name
+    const lvl = this._getLevelName(value);
+    this._showCelebrationText(`★ ${lvl} COMPLETE! ★\nUNLOCKED ${value} TILE!\n+${COIN_REWARDS.MILESTONE} COINS BONUS`);
 
     this._saveGameState();
   }
@@ -579,10 +625,16 @@ export class MainScene extends Phaser.Scene {
         this.sound.context.resume();
       }
 
-      // 0. Instant Top-Left Pause Corner Hit (Covers entire top-left region: X <= 150, Y <= 110)
-      if (pointer.x <= 150 && pointer.y <= 110) {
-        this.pauseGame();
-        return;
+      // 0. Instant Top-Left Corner Hits (Pause and Help ?)
+      if (pointer.y <= 95) {
+        if (pointer.x <= 85) {
+          this.pauseGame();
+          return;
+        }
+        if (pointer.x > 85 && pointer.x <= 155) {
+          this.openHowToPlay();
+          return;
+        }
       }
 
       // 0b. Direct Coin Shop Tap (Coin capsule region: X <= 220, Y between 85 and 135)
@@ -592,6 +644,8 @@ export class MainScene extends Phaser.Scene {
       }
 
       if (!this.isInputActive) return;
+
+      this._dismissTutorial();
 
       // 1. Foolproof Bottom Dock click handling
       if (pointer.y >= BOTTOM_DOCK_Y - 45) {
@@ -670,6 +724,7 @@ export class MainScene extends Phaser.Scene {
   }
 
   _handleFire(col) {
+    this._dismissTutorial();
     this.shooter.shoot(col, async (result) => {
       const { block, landingRow, isOverflow } = result;
 
@@ -958,7 +1013,198 @@ export class MainScene extends Phaser.Scene {
 
     this.shooter.initShooter(maxVal);
     this.shooter.unlock();
+
+    this.isTutorialDismissed = false;
+    this._createTutorial();
+
     this._saveGameState();
+  }
+
+  _createTutorial() {
+    if (this.tutorialContainer || this.isTutorialDismissed) return;
+    if (this.score > 0) return;
+
+    this.tutorialContainer = this.add.container(0, 0);
+    this.tutorialContainer.setDepth(60);
+
+    const targetCol = 2;
+    const targetX = GameSettings.getColumnCenterX(targetCol);
+
+    // 1. Neon Pill Guide Banner
+    const bannerY = 760;
+    const bannerW = 500;
+    const bannerH = 72;
+
+    const bannerBg = this.add.graphics();
+    bannerBg.fillStyle(0x060b1c, 0.95);
+    bannerBg.lineStyle(2.5, 0x00f0ff, 0.95);
+    bannerBg.fillRoundedRect(GAME_WIDTH / 2 - bannerW / 2, bannerY - bannerH / 2, bannerW, bannerH, 20);
+    bannerBg.strokeRoundedRect(GAME_WIDTH / 2 - bannerW / 2, bannerY - bannerH / 2, bannerW, bannerH, 20);
+    this.tutorialContainer.add(bannerBg);
+
+    const bannerText = this.add.text(GAME_WIDTH / 2, bannerY - 12, '👆 TAP COLUMN TO SHOOT & MERGE!', {
+      fontFamily: '"Arial Black", sans-serif',
+      fontSize: '18px',
+      color: '#00f0ff',
+      fontStyle: 'bold',
+      letterSpacing: 1,
+    }).setOrigin(0.5);
+    this.tutorialContainer.add(bannerText);
+
+    const bannerSub = this.add.text(GAME_WIDTH / 2, bannerY + 16, 'MATCH IDENTICAL TILES: 4 + 4 ➔ 8', {
+      fontFamily: '"Arial Black", sans-serif',
+      fontSize: '13px',
+      color: '#39ff14',
+      fontStyle: 'bold',
+      letterSpacing: 2,
+    }).setOrigin(0.5);
+    this.tutorialContainer.add(bannerSub);
+
+    // 2. Animated Finger Pointer Hand
+    const handY = SHOOTER_Y - 95;
+    this.tutorialHand = this.add.text(targetX, handY, '👆', {
+      fontSize: '46px',
+    }).setOrigin(0.5);
+    this.tutorialContainer.add(this.tutorialHand);
+
+    // Bouncing Finger Animation
+    this.tweens.add({
+      targets: this.tutorialHand,
+      y: handY - 26,
+      scaleX: 1.15,
+      scaleY: 1.15,
+      duration: 480,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+
+    // Gentle banner pulse
+    this.tweens.add({
+      targets: [bannerText, bannerBg],
+      scaleX: 1.02,
+      scaleY: 1.02,
+      duration: 600,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+  }
+
+  _dismissTutorial() {
+    if (!this.tutorialContainer) return;
+    this.isTutorialDismissed = true;
+    this.tweens.add({
+      targets: this.tutorialContainer,
+      alpha: 0,
+      duration: 250,
+      onComplete: () => {
+        if (this.tutorialContainer) {
+          this.tutorialContainer.destroy();
+          this.tutorialContainer = null;
+        }
+      },
+    });
+  }
+
+  openHowToPlay() {
+    if (this.scene.isActive('PauseScene') || this.scene.isActive('ShopScene') || this.scene.isActive('GameOverScene')) return;
+    if (this.howToPlayModal) return;
+
+    this.isInputActive = false;
+    this.shooter.hideAim();
+    this.events.emit('play-sound', AUDIO_KEYS.WARN, { volume: 0.4 });
+
+    this.howToPlayModal = this.add.container(0, 0);
+    this.howToPlayModal.setDepth(100);
+
+    // Dark backdrop overlay
+    const overlay = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x05060e, 0.92);
+    overlay.setInteractive();
+    this.howToPlayModal.add(overlay);
+
+    const cardW = 580;
+    const cardH = 680;
+    const cardY = GAME_HEIGHT / 2;
+
+    const cardBg = this.add.graphics();
+    cardBg.fillStyle(0x0e1329, 0.98);
+    cardBg.fillRoundedRect(GAME_WIDTH / 2 - cardW / 2, cardY - cardH / 2, cardW, cardH, 24);
+    cardBg.lineStyle(3, 0x00f0ff, 0.9);
+    cardBg.strokeRoundedRect(GAME_WIDTH / 2 - cardW / 2, cardY - cardH / 2, cardW, cardH, 24);
+    this.howToPlayModal.add(cardBg);
+
+    // Top neon accent
+    const topAccent = this.add.graphics();
+    topAccent.fillStyle(0x00f0ff, 1);
+    topAccent.fillRoundedRect(GAME_WIDTH / 2 - 140, cardY - cardH / 2 - 3, 280, 6, 3);
+    this.howToPlayModal.add(topAccent);
+
+    // Title
+    const title = this.add.text(GAME_WIDTH / 2, cardY - cardH / 2 + 50, '⚡ HOW TO PLAY ⚡', {
+      fontFamily: '"Arial Black", sans-serif',
+      fontSize: '26px',
+      color: '#00f0ff',
+      fontStyle: 'bold',
+      letterSpacing: 2,
+    }).setOrigin(0.5);
+    this.howToPlayModal.add(title);
+
+    // Rules list
+    const rules = [
+      { icon: '🎯', title: 'AIM & TAP TO FIRE', desc: 'Tap any column to launch numbers straight up into the grid.' },
+      { icon: '⚡', title: 'MERGE 2048', desc: 'Hit matching numbers (2+2, 4+4, 8+8) to merge into bigger tiles & earn coins!' },
+      { icon: '⚠️', title: 'DANGER LINE', desc: 'Keep columns below the red danger line. If full, game is over!' },
+      { icon: '🔨', title: 'SMASH HAMMER', desc: 'In a pinch? Tap the Hammer to disintegrate any blocking tile!' },
+    ];
+
+    let stepY = cardY - cardH / 2 + 130;
+    rules.forEach((rule) => {
+      const icon = this.add.text(GAME_WIDTH / 2 - 210, stepY, rule.icon, { fontSize: '28px' }).setOrigin(0.5);
+      const rTitle = this.add.text(GAME_WIDTH / 2 - 170, stepY - 14, rule.title, {
+        fontFamily: '"Arial Black", sans-serif',
+        fontSize: '16px',
+        color: '#ffea00',
+        fontStyle: 'bold',
+      });
+      const rDesc = this.add.text(GAME_WIDTH / 2 - 170, stepY + 12, rule.desc, {
+        fontFamily: 'sans-serif',
+        fontSize: '13px',
+        color: '#c0cfee',
+        wordWrap: { width: 360 },
+      });
+      this.howToPlayModal.add([icon, rTitle, rDesc]);
+      stepY += 105;
+    });
+
+    // Close button
+    const btnW = 320;
+    const btnH = 56;
+    const btnY = cardY + cardH / 2 - 58;
+    const btnBg = this.add.graphics();
+    btnBg.fillStyle(0x00f0ff, 1);
+    btnBg.fillRoundedRect(GAME_WIDTH / 2 - btnW / 2, btnY - btnH / 2, btnW, btnH, 16);
+    this.howToPlayModal.add(btnBg);
+
+    const btnText = this.add.text(GAME_WIDTH / 2, btnY, 'LET\'S PLAY!', {
+      fontFamily: '"Arial Black", sans-serif',
+      fontSize: '20px',
+      color: '#080914',
+      fontStyle: 'bold',
+      letterSpacing: 2,
+    }).setOrigin(0.5);
+    this.howToPlayModal.add(btnText);
+
+    const btnHit = this.add.rectangle(GAME_WIDTH / 2, btnY, btnW, btnH, 0x000000, 0);
+    btnHit.setInteractive({ useHandCursor: true });
+    btnHit.on('pointerdown', () => {
+      this.events.emit('play-sound', AUDIO_KEYS.LAND, { volume: 0.6 });
+      this.howToPlayModal.destroy();
+      this.howToPlayModal = null;
+      this.isInputActive = true;
+      this.shooter.unlock();
+    });
+    this.howToPlayModal.add(btnHit);
   }
 
   _applySavedData(data) {

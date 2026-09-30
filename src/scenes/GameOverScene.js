@@ -129,7 +129,7 @@ export class GameOverScene extends Phaser.Scene {
     panel.add(tileTag);
 
     // 3. Interactive Buttons (Direct top-level objects at depth 10 to ensure 100% click reliability)
-    let currentRelY = 110;
+    let currentRelY = this.canRevive ? 95 : 120;
     this.reviveWorldY = null;
 
     if (this.canRevive) {
@@ -144,7 +144,7 @@ export class GameOverScene extends Phaser.Scene {
         0x0a2f15,
         () => this._handleRevive(canCoinRevive)
       );
-      currentRelY += 80;
+      currentRelY += 72;
     }
 
     this.retryWorldY = panelY + currentRelY;
@@ -155,6 +155,17 @@ export class GameOverScene extends Phaser.Scene {
       0x00f0ff,
       0x072735,
       () => this._handleRestart()
+    );
+    currentRelY += 72;
+
+    this.shareWorldY = panelY + currentRelY;
+    this._createFlatButton(
+      GAME_WIDTH / 2,
+      this.shareWorldY,
+      '📲 CHALLENGE A FRIEND',
+      0xff007f,
+      0x2e0618,
+      () => this._handleShareScore()
     );
 
     // Pop-in animation for panel
@@ -188,6 +199,16 @@ export class GameOverScene extends Phaser.Scene {
         Math.abs(pointer.y - this.reviveWorldY) <= 32
       ) {
         this._handleRevive();
+        return;
+      }
+
+      // Check Challenge click
+      if (
+        this.shareWorldY !== null &&
+        Math.abs(pointer.x - GAME_WIDTH / 2) <= 190 &&
+        Math.abs(pointer.y - this.shareWorldY) <= 32
+      ) {
+        this._handleShareScore();
         return;
       }
     });
@@ -291,6 +312,59 @@ export class GameOverScene extends Phaser.Scene {
     if (main) {
       main.startNewGame();
     }
+  }
+
+  _handleShareScore() {
+    this._playSound(AUDIO_KEYS.LAND, { volume: 0.8 });
+    const text = `🔥 I scored ${this.score.toLocaleString()} points in Neon Merge 2048! Can you beat my high score? Play free instantly:`;
+    const url = 'https://neon-merge-2048.netlify.app';
+
+    if (navigator.share) {
+      navigator
+        .share({
+          title: 'Neon Merge 2048 Challenge',
+          text: `${text}\n${url}`,
+          url: url,
+        })
+        .catch(() => {});
+    } else {
+      const shareUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(`${text}\n${url}`)}`;
+      window.open(shareUrl, '_blank');
+    }
+
+    try {
+      navigator.clipboard?.writeText?.(`${text}\n${url}`);
+    } catch (_) {}
+
+    this._showFloatingToast('CHALLENGE LINK COPIED / OPENED!');
+  }
+
+  _showFloatingToast(msg) {
+    const toast = this.add.container(GAME_WIDTH / 2, GAME_HEIGHT - 120);
+    toast.setDepth(50);
+
+    const bg = this.add.graphics();
+    bg.fillStyle(0x00f0ff, 0.95);
+    bg.fillRoundedRect(-180, -22, 360, 44, 12);
+    toast.add(bg);
+
+    const label = this.add.text(0, 0, msg, {
+      fontFamily: '"Arial Black", sans-serif',
+      fontSize: '13px',
+      color: '#080914',
+      fontStyle: 'bold',
+      letterSpacing: 1,
+    }).setOrigin(0.5);
+    toast.add(label);
+
+    this.tweens.add({
+      targets: toast,
+      y: GAME_HEIGHT - 160,
+      alpha: 0,
+      duration: 1800,
+      ease: 'Cubic.easeOut',
+      onComplete: () => toast.destroy(),
+    });
   }
 }
 
