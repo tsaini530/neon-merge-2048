@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT, AUDIO_KEYS, POWERUP_COSTS } from '../config/constants.js';
 import ytService from '../sdk/ytService.js';
+import playgamaService from '../sdk/playgamaService.js';
 
 export class ShopScene extends Phaser.Scene {
   constructor() {
@@ -10,11 +11,13 @@ export class ShopScene extends Phaser.Scene {
   init(data) {
     this.coins = data.coins || 0;
     this.isClosing = false;
+    this.isAdShowing = false;
   }
 
   create() {
     this.isClosing = false;
-    const centerY = GAME_HEIGHT / 2 - 10;
+    this.isAdShowing = false;
+    const centerY = GAME_HEIGHT / 2;
     const main = this.scene.get('MainScene');
 
     // 1. Dark Backdrop Overlay
@@ -24,20 +27,20 @@ export class ShopScene extends Phaser.Scene {
       GAME_WIDTH,
       GAME_HEIGHT,
       0x05060e,
-      0.88
+      0.90
     );
     this.overlay.setDepth(1);
     this.overlay.setInteractive();
     this.overlay.on('pointerdown', (pointer) => {
-      if (this.isClosing) return;
-      if (Math.abs(pointer.x - GAME_WIDTH / 2) > 280 || Math.abs(pointer.y - centerY) > 310) {
+      if (this.isClosing || this.isAdShowing) return;
+      if (Math.abs(pointer.x - GAME_WIDTH / 2) > 290 || Math.abs(pointer.y - centerY) > 375) {
         this._handleClose();
       }
     });
 
     // 2. Main Dialog Panel Card
-    const boxW = 560;
-    const boxH = 620;
+    const boxW = 580;
+    const boxH = 750;
 
     const panelBg = this.add.graphics();
     panelBg.fillStyle(0x0e1329, 0.98);
@@ -49,11 +52,11 @@ export class ShopScene extends Phaser.Scene {
     // Glowing gold top bar accent
     const topBar = this.add.graphics();
     topBar.fillStyle(0xffea00, 1);
-    topBar.fillRoundedRect(GAME_WIDTH / 2 - 130, centerY - boxH / 2 - 3, 260, 6, 3);
+    topBar.fillRoundedRect(GAME_WIDTH / 2 - 140, centerY - boxH / 2 - 3, 280, 6, 3);
     topBar.setDepth(6);
 
     // Title
-    const titleText = this.add.text(GAME_WIDTH / 2, centerY - 255, '⚡ CYBER POWER SHOP', {
+    const titleText = this.add.text(GAME_WIDTH / 2, centerY - 325, '⚡ CYBER POWER SHOP', {
       fontFamily: '"Arial Black", sans-serif',
       fontSize: '26px',
       color: '#ffea00',
@@ -83,18 +86,18 @@ export class ShopScene extends Phaser.Scene {
     // Balance Display Capsule
     const balBg = this.add.graphics();
     balBg.fillStyle(0x070b1a, 0.95);
-    balBg.lineStyle(1.5, 0xffea00, 0.8);
-    balBg.fillRoundedRect(GAME_WIDTH / 2 - 150, centerY - 215, 300, 42, 12);
-    balBg.strokeRoundedRect(GAME_WIDTH / 2 - 150, centerY - 215, 300, 42, 12);
+    balBg.lineStyle(1.5, 0xffea00, 0.85);
+    balBg.fillRoundedRect(GAME_WIDTH / 2 - 160, centerY - 280, 320, 42, 12);
+    balBg.strokeRoundedRect(GAME_WIDTH / 2 - 160, centerY - 280, 320, 42, 12);
     balBg.setDepth(7);
 
     this.balanceText = this.add.text(
       GAME_WIDTH / 2,
-      centerY - 194,
+      centerY - 259,
       `YOUR BALANCE:  ${this.coins} ¢`,
       {
         fontFamily: '"Arial Black", sans-serif',
-        fontSize: '16px',
+        fontSize: '17px',
         color: '#ffea00',
         letterSpacing: 1,
         fontStyle: 'bold',
@@ -103,15 +106,81 @@ export class ShopScene extends Phaser.Scene {
     this.balanceText.setDepth(8);
 
     // Status Notification Text
-    this.statusText = this.add.text(GAME_WIDTH / 2, centerY - 158, 'TAP ANY POWER-UP TO PURCHASE', {
+    this.statusText = this.add.text(GAME_WIDTH / 2, centerY - 224, 'TAP ANY ITEM OR SPONSOR REWARD', {
       fontFamily: '"Arial Black", sans-serif',
-      fontSize: '12px',
+      fontSize: '13px',
       color: '#8da2d4',
       letterSpacing: 1,
     }).setOrigin(0.5);
     this.statusText.setDepth(8);
 
-    // 3. Shop Items
+    // 3. FREE SPONSOR REWARDS (Rewarded Ads)
+    const adHeader = this.add.text(GAME_WIDTH / 2, centerY - 188, '── ▶ FREE SPONSOR REWARDS ──', {
+      fontFamily: '"Arial Black", sans-serif',
+      fontSize: '13px',
+      color: '#00f0ff',
+      letterSpacing: 2,
+    }).setOrigin(0.5);
+    adHeader.setDepth(7);
+
+    // Two side-by-side Free Ad Buttons
+    const adBtnW = 250;
+    const adBtnH = 76;
+    const adBtnY = centerY - 132;
+
+    // Card 1: Free Coins
+    this._createRewardedAdCard({
+      x: GAME_WIDTH / 2 - 134,
+      y: adBtnY,
+      width: adBtnW,
+      height: adBtnH,
+      title: '+100 COINS (¢)',
+      desc: 'Free Sponsor Reward',
+      placement: 'shop_coins',
+      color: 0xffea00,
+      hex: '#ffea00',
+      onReward: () => {
+        this.coins += 100;
+        this.balanceText.setText(`YOUR BALANCE:  ${this.coins} ¢`);
+        if (main) {
+          main.coins = this.coins;
+          if (main.coinText) main.coinText.setText(`${this.coins}`);
+          main._saveGameState();
+        }
+        this._showFloatingText(GAME_WIDTH / 2 - 134, adBtnY - 45, '+100 ¢', '#ffea00');
+      },
+    });
+
+    // Card 2: Free Smasher
+    this._createRewardedAdCard({
+      x: GAME_WIDTH / 2 + 134,
+      y: adBtnY,
+      width: adBtnW,
+      height: adBtnH,
+      title: '+1 SMASHER (★)',
+      desc: 'Free Sponsor Reward',
+      placement: 'shop_hammer',
+      color: 0x00ff88,
+      hex: '#00ff88',
+      onReward: () => {
+        if (main) {
+          main.hammerCount++;
+          main.shooter.setHammerCount(main.hammerCount);
+          main._saveGameState();
+        }
+        this._showFloatingText(GAME_WIDTH / 2 + 134, adBtnY - 45, '+1 SMASH!', '#00ff88');
+      },
+    });
+
+    // 4. POWER-UP SHOP (Purchasable with Coins)
+    const shopHeader = this.add.text(GAME_WIDTH / 2, centerY - 64, '── ⚡ COIN POWER-UPS ──', {
+      fontFamily: '"Arial Black", sans-serif',
+      fontSize: '13px',
+      color: '#ffd700',
+      letterSpacing: 2,
+    }).setOrigin(0.5);
+    shopHeader.setDepth(7);
+
     const items = [
       {
         name: 'SMASHER (+1)',
@@ -149,13 +218,13 @@ export class ShopScene extends Phaser.Scene {
       },
     ];
 
-    let startY = centerY - 95;
+    let startY = centerY - 10;
     items.forEach((item, index) => {
-      this._createShopRow(GAME_WIDTH / 2, startY + index * 92, item);
+      this._createShopRow(GAME_WIDTH / 2, startY + index * 84, item);
     });
 
-    // 4. Bottom Close Button
-    const bottomBtnY = centerY + 240;
+    // 5. Bottom Close Button
+    const bottomBtnY = centerY + 270;
     this._createFlatButton(
       GAME_WIDTH / 2,
       bottomBtnY,
@@ -166,28 +235,126 @@ export class ShopScene extends Phaser.Scene {
     );
   }
 
+  _createRewardedAdCard({ x, y, width, height, title, desc, placement, color, hex, onReward }) {
+    const bg = this.add.graphics();
+    const renderBg = (borderColor, fillAlpha = 0.12) => {
+      bg.clear();
+      bg.fillStyle(0x070b1a, 0.96);
+      bg.fillRoundedRect(x - width / 2, y - height / 2, width, height, 14);
+      bg.fillStyle(borderColor, fillAlpha);
+      bg.fillRoundedRect(x - width / 2, y - height / 2, width, height, 14);
+      bg.lineStyle(2, borderColor, 0.9);
+      bg.strokeRoundedRect(x - width / 2, y - height / 2, width, height, 14);
+    };
+    renderBg(color, 0.10);
+    bg.setDepth(8);
+
+    const titleTxt = this.add.text(x, y - 18, title, {
+      fontFamily: '"Arial Black", sans-serif',
+      fontSize: '16px',
+      color: hex,
+      fontStyle: 'bold',
+    }).setOrigin(0.5);
+    titleTxt.setDepth(9);
+
+    const subTxt = this.add.text(x, y + 8, '[ ▶ WATCH AD ]', {
+      fontFamily: '"Arial Black", sans-serif',
+      fontSize: '13px',
+      color: '#ffffff',
+      letterSpacing: 1,
+    }).setOrigin(0.5);
+    subTxt.setDepth(9);
+
+    const hit = this.add.rectangle(x, y, width, height, 0x000000, 0);
+    hit.setDepth(15);
+    hit.setInteractive({ useHandCursor: true });
+
+    let isBusy = false;
+
+    hit.on('pointerdown', async (pointer) => {
+      if (pointer && pointer.event) pointer.event.stopPropagation();
+      if (isBusy || this.isAdShowing) return;
+
+      isBusy = true;
+      this.isAdShowing = true;
+      this._playSound(AUDIO_KEYS.SWAP, { volume: 0.4 });
+
+      subTxt.setText('▶ OPENING AD...');
+      subTxt.setColor('#00f0ff');
+      renderBg(0x00f0ff, 0.25);
+      this.statusText.setText('LOADING SPONSOR AD...');
+      this.statusText.setColor('#00f0ff');
+
+      const isRewarded = await playgamaService.showRewarded(placement);
+
+      this.isAdShowing = false;
+
+      if (isRewarded) {
+        // Rewarded!
+        onReward();
+        this._playSound(AUDIO_KEYS.POWERUP, { volume: 0.85 });
+        this.statusText.setText(`✓ ${title} UNLOCKED!`);
+        this.statusText.setColor('#39ff14');
+
+        subTxt.setText('✓ CLAIMED!');
+        subTxt.setColor('#39ff14');
+        renderBg(0x39ff14, 0.25);
+
+        this.time.delayedCall(2000, () => {
+          subTxt.setText('[ ▶ WATCH AD ]');
+          subTxt.setColor('#ffffff');
+          renderBg(color, 0.10);
+          isBusy = false;
+        });
+      } else {
+        // Early close or failed: Strictly NO reward granted!
+        this._playSound(AUDIO_KEYS.WARN, { volume: 0.6 });
+        this.statusText.setText('✕ AD CLOSED EARLY — NO REWARD');
+        this.statusText.setColor('#ff005d');
+
+        subTxt.setText('✕ AD CANCELLED');
+        subTxt.setColor('#ff005d');
+        renderBg(0xff005d, 0.25);
+
+        this.time.delayedCall(2200, () => {
+          subTxt.setText('[ ▶ WATCH AD ]');
+          subTxt.setColor('#ffffff');
+          renderBg(color, 0.10);
+          isBusy = false;
+        });
+      }
+    });
+
+    hit.on('pointerover', () => {
+      if (!isBusy) titleTxt.setScale(1.04);
+    });
+    hit.on('pointerout', () => {
+      titleTxt.setScale(1);
+    });
+  }
+
   _createShopRow(x, y, item) {
-    const rowW = 500;
-    const rowH = 78;
+    const rowW = 510;
+    const rowH = 72;
 
     // Card background
     const bg = this.add.graphics();
     bg.fillStyle(0x070b1a, 0.95);
-    bg.fillRoundedRect(x - rowW / 2, y - rowH / 2, rowW, rowH, 16);
-    bg.lineStyle(2, item.color, 0.7);
-    bg.strokeRoundedRect(x - rowW / 2, y - rowH / 2, rowW, rowH, 16);
+    bg.fillRoundedRect(x - rowW / 2, y - rowH / 2, rowW, rowH, 14);
+    bg.lineStyle(2, item.color, 0.75);
+    bg.strokeRoundedRect(x - rowW / 2, y - rowH / 2, rowW, rowH, 14);
     bg.setDepth(8);
 
     // Title & Description
-    const title = this.add.text(x - rowW / 2 + 20, y - 16, item.name, {
+    const title = this.add.text(x - rowW / 2 + 18, y - 15, item.name, {
       fontFamily: '"Arial Black", sans-serif',
-      fontSize: '17px',
+      fontSize: '16px',
       color: '#ffffff',
       fontStyle: 'bold',
     });
     title.setDepth(9);
 
-    const desc = this.add.text(x - rowW / 2 + 20, y + 10, item.desc, {
+    const desc = this.add.text(x - rowW / 2 + 18, y + 9, item.desc, {
       fontFamily: 'sans-serif',
       fontSize: '12px',
       color: '#8da2d4',
@@ -195,9 +362,9 @@ export class ShopScene extends Phaser.Scene {
     desc.setDepth(9);
 
     // Buy Button on Right
-    const btnW = 130;
-    const btnH = 46;
-    const btnX = x + rowW / 2 - 80;
+    const btnW = 120;
+    const btnH = 44;
+    const btnX = x + rowW / 2 - 72;
     const btnY = y;
 
     const btnBg = this.add.graphics();
@@ -209,7 +376,7 @@ export class ShopScene extends Phaser.Scene {
 
     const btnLabel = this.add.text(btnX, btnY, `${item.cost} ¢`, {
       fontFamily: '"Arial Black", sans-serif',
-      fontSize: '17px',
+      fontSize: '16px',
       color: '#ffea00',
       fontStyle: 'bold',
     }).setOrigin(0.5);
@@ -233,7 +400,7 @@ export class ShopScene extends Phaser.Scene {
     if (this.coins < item.cost) {
       // Not enough coins
       this._playSound(AUDIO_KEYS.WARN, { volume: 0.6 });
-      this.statusText.setText(`✕ NEED ${item.cost - this.coins} MORE COINS!`);
+      this.statusText.setText(`✕ NEED ${item.cost - this.coins} MORE COINS! (WATCH AD ABOVE)`);
       this.statusText.setColor('#ff005d');
       this.tweens.add({
         targets: this.balanceText,
@@ -272,9 +439,26 @@ export class ShopScene extends Phaser.Scene {
     });
   }
 
+  _showFloatingText(x, y, text, color) {
+    const toast = this.add.text(x, y, text, {
+      fontFamily: '"Arial Black", sans-serif',
+      fontSize: '20px',
+      color: color,
+    }).setOrigin(0.5);
+    toast.setDepth(20);
+
+    this.tweens.add({
+      targets: toast,
+      y: y - 40,
+      alpha: 0,
+      duration: 1100,
+      onComplete: () => toast.destroy(),
+    });
+  }
+
   _createFlatButton(x, y, text, borderColor, bgColor, onClick) {
-    const width = 420;
-    const height = 52;
+    const width = 440;
+    const height = 50;
 
     const bg = this.add.graphics();
     bg.fillStyle(bgColor, 0.98);
@@ -306,7 +490,7 @@ export class ShopScene extends Phaser.Scene {
   }
 
   _playSound(key, config = {}) {
-    if (!ytService.isAudioEnabled()) return;
+    if (playgamaService.isAudioMuted()) return;
     try {
       if (this.sound && this.sound.context && this.sound.context.state === 'suspended') {
         this.sound.context.resume();
@@ -320,7 +504,7 @@ export class ShopScene extends Phaser.Scene {
   }
 
   _handleClose() {
-    if (this.isClosing) return;
+    if (this.isClosing || this.isAdShowing) return;
     this.isClosing = true;
 
     this._playSound(AUDIO_KEYS.LAND, { volume: 0.65 });

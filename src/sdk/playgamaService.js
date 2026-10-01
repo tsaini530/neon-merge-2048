@@ -147,13 +147,24 @@ class PlaygamaService {
   }
 
   /**
+   * Active Bridge instance (prefers platform window.bridge if available)
+   */
+  get activeBridge() {
+    if (typeof window !== 'undefined' && window.bridge) {
+      return window.bridge;
+    }
+    return this.bridge || bridge;
+  }
+
+  /**
    * Show Interstitial Ad at natural break
    */
   showInterstitial(placement = 'game_over') {
     try {
-      if (bridge.advertisement?.isInterstitialSupported) {
+      const active = this.activeBridge;
+      if (active?.advertisement?.isInterstitialSupported) {
         console.log('[PlaygamaBridge] Showing interstitial ad for placement:', placement);
-        bridge.advertisement.showInterstitial(placement);
+        active.advertisement.showInterstitial(placement);
         return true;
       }
     } catch (err) {
@@ -162,29 +173,108 @@ class PlaygamaService {
     return false;
   }
 
+  get isRewardedSupported() {
+    const active = this.activeBridge;
+    return Boolean(active?.advertisement?.isRewardedSupported);
+  }
+
   /**
-   * Show Rewarded Ad to revive player
+   * Preload Rewarded Ad
    */
-  showRewarded() {
+  preloadRewarded(placement = 'bonus') {
+    try {
+      const active = this.activeBridge;
+      if (active?.advertisement && typeof active.advertisement.preloadRewarded === 'function') {
+        console.log('[PlaygamaBridge] Preloading rewarded ad for placement:', placement);
+        active.advertisement.preloadRewarded(placement);
+      }
+    } catch (err) {
+      console.warn('[PlaygamaBridge] preloadRewarded error:', err);
+    }
+  }
+
+  /**
+   * Show Rewarded Ad (Handles early close, full reward, and sound muting)
+   * Resolves to true ONLY if 'rewarded' state was received before 'closed'.
+   * Returns false if closed early, failed, or timed out.
+   */
+  showRewarded(placement = 'bonus') {
     return new Promise((resolve) => {
       let isRewarded = false;
+      let isSettled = false;
+      const active = this.activeBridge;
+      const eventName = active?.EVENT_NAME || EVENT_NAME;
+      const eventKey = eventName?.REWARDED_STATE_CHANGED || 'rewarded_state_changed';
+
+      // Both activeBridge and bundled bridge references
+      const bridgeList = [active];
+      if (bridge && bridge !== active) bridgeList.push(bridge);
+
+      const finish = (result) => {
+        if (isSettled) return;
+        isSettled = true;
+        clearTimeout(timeoutId);
+
+        try {
+          bridgeList.forEach((b) => {
+            b.advertisement?.off?.(eventKey, stateHandler);
+          });
+        } catch (_) {}
+
+        // Restore game sound if audio is enabled
+        this._syncPhaserAudio();
+        console.log(`[PlaygamaBridge] Rewarded ad finished. Result: ${result ? 'SUCCESS (REWARDED)' : 'CLOSED/FAILED (NO REWARD)'}`);
+        resolve(result);
+      };
+
+      // 60-second safeguard timeout against network stall or hanging ads
+      const timeoutId = setTimeout(() => {
+        console.warn('[PlaygamaBridge] Rewarded ad timeout safeguard triggered');
+        finish(false);
+      }, 60000);
 
       const stateHandler = (state) => {
-        console.log('[PlaygamaBridge] Rewarded ad state:', state);
-        if (state === 'rewarded') {
-          isRewarded = true;
-        } else if (state === 'closed' || state === 'failed') {
-          bridge.advertisement.off(EVENT_NAME.REWARDED_STATE_CHANGED, stateHandler);
-          resolve(isRewarded);
+        console.log('[PlaygamaBridge] Rewarded ad state:', state, 'placement:', placement);
+        switch (state) {
+          case 'loading':
+            break;
+          case 'opened':
+            // Mute game audio during ad playback so it doesn't clash
+            if (this.gameInstance && this.gameInstance.sound) {
+              this.gameInstance.sound.mute = true;
+            }
+            break;
+          case 'rewarded':
+            // ONLY grant reward if this event is explicitly received!
+            isRewarded = true;
+            break;
+          case 'closed':
+            finish(isRewarded);
+            break;
+          case 'failed':
+            finish(false);
+            break;
+          default:
+            break;
         }
       };
 
       try {
-        bridge.advertisement.on(EVENT_NAME.REWARDED_STATE_CHANGED, stateHandler);
-        bridge.advertisement.showRewarded();
+        if (!active?.advertisement || typeof active.advertisement.showRewarded !== 'function') {
+          console.warn('[PlaygamaBridge] activeBridge.advertisement.showRewarded not available');
+          finish(false);
+          return;
+        }
+
+        bridgeList.forEach((b) => {
+          b.advertisement?.on?.(eventKey, stateHandler);
+        });
+
+        console.log('[PlaygamaBridge] Triggering rewarded ad on platform for placement:', placement);
+        active.advertisement.showRewarded(placement);
       } catch (e) {
         console.warn('[PlaygamaBridge] showRewarded error:', e);
-        resolve(false);
+        finish(false);
       }
     });
   }
@@ -312,4 +402,10 @@ class PlaygamaService {
 }
 
 export const playgamaService = new PlaygamaService();
+
+if (typeof window !== 'undefined') {
+  window.playgamaService = playgamaService;
+  window.showRewardedAd = (placement = 'bonus') => playgamaService.showRewarded(placement);
+}
+
 export default playgamaService;

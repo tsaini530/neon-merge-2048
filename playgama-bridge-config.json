@@ -6,7 +6,16 @@
       "disable": false
     },
     "rewarded": {
-      "disable": false
+      "disable": false,
+      "preloadOnStart": "bonus",
+      "placementFallback": "bonus",
+      "placements": [
+        { "id": "bonus" },
+        { "id": "shop_coins" },
+        { "id": "shop_hammer" },
+        { "id": "free_smash" },
+        { "id": "revive" }
+      ]
     }
   },
   "leaderboards": [

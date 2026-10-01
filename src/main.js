@@ -37,6 +37,8 @@ playgamaService.init();
 
 if (typeof window !== 'undefined') {
   window.game = game;
+  window.playgamaService = playgamaService;
+  window.showRewardedAd = (placement = 'bonus') => playgamaService.showRewarded(placement);
 }
 
 export default game;

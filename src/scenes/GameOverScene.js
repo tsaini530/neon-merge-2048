@@ -19,9 +19,9 @@ export class GameOverScene extends Phaser.Scene {
   }
 
   create() {
-    // Interstitial ad breakpoint on game over
-    ytService.requestInterstitialAd();
-    playgamaService.showInterstitial('game_over');
+    this.isReviveAdLoading = false;
+    // Preload rewarded ad for revive
+    playgamaService.preloadRewarded('revive');
 
     // Play dramatic Game Over audio sequence or High Score celebration!
     const isNewRecord = this.score > 0 && this.score >= this.bestScore;
@@ -136,16 +136,16 @@ export class GameOverScene extends Phaser.Scene {
 
     if (this.canRevive) {
       this.reviveWorldY = panelY + currentRelY;
-      const canCoinRevive = this.coins >= POWERUP_COSTS.REVIVE;
-      const reviveText = canCoinRevive ? `▶ REVIVE (${POWERUP_COSTS.REVIVE} ¢)` : '▶ REVIVE (WATCH AD)';
-      this._createFlatButton(
+      const reviveText = '▶ REVIVE (WATCH AD)';
+      const reviveBtn = this._createFlatButton(
         GAME_WIDTH / 2,
         this.reviveWorldY,
         reviveText,
         0x39ff14,
         0x0a2f15,
-        () => this._handleRevive(canCoinRevive)
+        () => this._handleRevive(reviveBtn)
       );
+      this.reviveBtn = reviveBtn;
       currentRelY += 72;
     }
 
@@ -164,7 +164,7 @@ export class GameOverScene extends Phaser.Scene {
     this._createFlatButton(
       GAME_WIDTH / 2,
       this.shareWorldY,
-      '📲 CHALLENGE A FRIEND',
+      '★ CHALLENGE A FRIEND',
       0xff007f,
       0x2e0618,
       () => this._handleShareScore()
@@ -259,7 +259,7 @@ export class GameOverScene extends Phaser.Scene {
   }
 
   _playSound(key, config = {}) {
-    if (!ytService.isAudioEnabled()) return;
+    if (playgamaService.isAudioMuted()) return;
     try {
       if (this.sound && this.sound.context && this.sound.context.state === 'suspended') {
         this.sound.context.resume();
@@ -272,19 +272,13 @@ export class GameOverScene extends Phaser.Scene {
     }
   }
 
-  async _handleRevive(canCoinRevive) {
-    if (canCoinRevive && this.coins >= POWERUP_COSTS.REVIVE) {
-      this._playSound(AUDIO_KEYS.POWERUP, { volume: 0.85 });
-      this.scene.stop();
-      this.scene.resume('MainScene');
-      const main = this.scene.get('MainScene');
-      if (main) {
-        main.coins -= POWERUP_COSTS.REVIVE;
-        if (main.coinText) main.coinText.setText(`${main.coins}`);
-        main._saveGameState();
-        main.revivePlayer();
-      }
-      return;
+  async _handleRevive(btnRef) {
+    if (this.isReviveAdLoading) return;
+    this.isReviveAdLoading = true;
+
+    if (btnRef?.label) {
+      btnRef.label.setText('▶ OPENING AD...');
+      btnRef.label.setColor('#00f0ff');
     }
 
     console.log('[GameOverScene] Requesting Rewarded Ad for Revive...');
@@ -292,8 +286,11 @@ export class GameOverScene extends Phaser.Scene {
     if (ytService.isPlayablesEnv) {
       rewarded = await ytService.requestRewardedAd();
     } else {
-      rewarded = await playgamaService.showRewarded();
+      rewarded = await playgamaService.showRewarded('revive');
     }
+
+    this.isReviveAdLoading = false;
+
     if (rewarded) {
       this._playSound(AUDIO_KEYS.POWERUP, { volume: 0.8 });
       this.scene.stop();
@@ -302,12 +299,24 @@ export class GameOverScene extends Phaser.Scene {
       if (main) {
         main.revivePlayer();
       }
+    } else {
+      // Early close or failed: strictly no reward
+      this._playSound(AUDIO_KEYS.WARN, { volume: 0.5 });
+      if (btnRef?.label) {
+        btnRef.label.setText('✕ AD CANCELLED');
+        btnRef.label.setColor('#ff005d');
+        this.time.delayedCall(2000, () => {
+          btnRef.label.setText('▶ REVIVE (WATCH AD)');
+          btnRef.label.setColor('#ffffff');
+        });
+      }
     }
   }
 
   _handleRestart() {
     console.log('[GameOverScene] PLAY AGAIN clicked! Restarting game...');
     this._playSound(AUDIO_KEYS.POWERUP, { volume: 0.75 });
+    playgamaService.showInterstitial('game_over');
     this.scene.stop();
     this.scene.resume('MainScene');
     const main = this.scene.get('MainScene');

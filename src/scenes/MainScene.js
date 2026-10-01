@@ -710,8 +710,11 @@ export class MainScene extends Phaser.Scene {
           this._saveGameState();
           this.isHammerMode = true;
         } else {
-          this._showFloatingText(GAME_WIDTH / 2, BOTTOM_DOCK_Y - 40, `NEED ${POWERUP_COSTS.HAMMER} COINS FOR SMASH!`, '#ff005d');
+          this._showFloatingText(GAME_WIDTH / 2, BOTTOM_DOCK_Y - 40, `NEED COINS! OPENING SHOP FOR FREE SMASH...`, '#ff005d');
           this.events.emit('play-sound', AUDIO_KEYS.WARN, { volume: 0.5 });
+          this.time.delayedCall(300, () => {
+            this.openShop();
+          });
           return;
         }
       } else {

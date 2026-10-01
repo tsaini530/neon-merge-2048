@@ -463,24 +463,28 @@ export class BootScene extends Phaser.Scene {
     // --- Action Button(s) ---
     const actionAreaY = tipsY + 172;
 
+    // Preload rewarded bonus ad for instant playback when user or QA clicks
+    playgamaService.preloadRewarded('bonus');
+
     if (hasSavedRun) {
       // Button 1: CONTINUE RUN
       const contBtnBg = this.add.graphics();
       const contBtnW = 580;
-      const contBtnH = 74;
+      const contBtnH = 68;
       contBtnBg.fillStyle(0x00f0ff, 0.18);
-      contBtnBg.fillRoundedRect(-contBtnW / 2, -contBtnH / 2, contBtnW, contBtnH, 20);
+      contBtnBg.fillRoundedRect(-contBtnW / 2, -contBtnH / 2, contBtnW, contBtnH, 18);
       contBtnBg.lineStyle(3, 0x00f0ff, 1);
-      contBtnBg.strokeRoundedRect(-contBtnW / 2, -contBtnH / 2, contBtnW, contBtnH, 20);
+      contBtnBg.strokeRoundedRect(-contBtnW / 2, -contBtnH / 2, contBtnW, contBtnH, 18);
 
       const contText = this.add.text(0, 0, `▶ CONTINUE RUN  (SCORE: ${formatScore(savedData.score)})`, {
         fontFamily: '"Arial Black", sans-serif',
-        fontSize: '21px',
+        fontSize: '20px',
         color: '#00f0ff',
         letterSpacing: 2,
       }).setOrigin(0.5);
 
-      const contContainer = this.add.container(GAME_WIDTH / 2, actionAreaY, [contBtnBg, contText]);
+      const contY = actionAreaY - 24;
+      const contContainer = this.add.container(GAME_WIDTH / 2, contY, [contBtnBg, contText]);
       this.tweens.add({
         targets: contContainer,
         scaleX: 1.025,
@@ -492,7 +496,7 @@ export class BootScene extends Phaser.Scene {
       });
       startContainer.add(contContainer);
 
-      const contHit = this.add.rectangle(GAME_WIDTH / 2, actionAreaY, contBtnW, contBtnH, 0x000000, 0).setInteractive({ useHandCursor: true });
+      const contHit = this.add.rectangle(GAME_WIDTH / 2, contY, contBtnW, contBtnH, 0x000000, 0).setInteractive({ useHandCursor: true });
       contHit.on('pointerdown', () => {
         this._startGame(savedData, selectedDifficulty);
       });
@@ -501,7 +505,7 @@ export class BootScene extends Phaser.Scene {
       // Button 2: START NEW GAME
       const newBtnBg = this.add.graphics();
       const newBtnW = 580;
-      const newBtnH = 60;
+      const newBtnH = 54;
       newBtnBg.fillStyle(0x0e1329, 0.85);
       newBtnBg.fillRoundedRect(-newBtnW / 2, -newBtnH / 2, newBtnW, newBtnH, 16);
       newBtnBg.lineStyle(1.5, 0x3d4f82, 0.9);
@@ -509,15 +513,16 @@ export class BootScene extends Phaser.Scene {
 
       const newText = this.add.text(0, 0, '↺ START NEW GAME', {
         fontFamily: '"Arial Black", sans-serif',
-        fontSize: '18px',
+        fontSize: '17px',
         color: '#8fa5d4',
         letterSpacing: 2,
       }).setOrigin(0.5);
 
-      const newContainer = this.add.container(GAME_WIDTH / 2, actionAreaY + 84, [newBtnBg, newText]);
+      const newY = actionAreaY + 46;
+      const newContainer = this.add.container(GAME_WIDTH / 2, newY, [newBtnBg, newText]);
       startContainer.add(newContainer);
 
-      const newHit = this.add.rectangle(GAME_WIDTH / 2, actionAreaY + 84, newBtnW, newBtnH, 0x000000, 0).setInteractive({ useHandCursor: true });
+      const newHit = this.add.rectangle(GAME_WIDTH / 2, newY, newBtnW, newBtnH, 0x000000, 0).setInteractive({ useHandCursor: true });
       newHit.on('pointerdown', () => {
         this._startGame(null, selectedDifficulty);
       });
@@ -526,25 +531,26 @@ export class BootScene extends Phaser.Scene {
       // Primary PLAY NOW button
       const playBtnBg = this.add.graphics();
       const playBtnW = 580;
-      const playBtnH = 82;
+      const playBtnH = 76;
       playBtnBg.fillStyle(0x00f0ff, 0.2);
-      playBtnBg.fillRoundedRect(-playBtnW / 2, -playBtnH / 2, playBtnW, playBtnH, 22);
+      playBtnBg.fillRoundedRect(-playBtnW / 2, -playBtnH / 2, playBtnW, playBtnH, 20);
       playBtnBg.lineStyle(3.5, 0x00f0ff, 1);
-      playBtnBg.strokeRoundedRect(-playBtnW / 2, -playBtnH / 2, playBtnW, playBtnH, 22);
+      playBtnBg.strokeRoundedRect(-playBtnW / 2, -playBtnH / 2, playBtnW, playBtnH, 20);
 
       const playText = this.add.text(0, 0, 'PLAY NOW ▶', {
         fontFamily: '"Arial Black", "Impact", sans-serif',
-        fontSize: '30px',
+        fontSize: '28px',
         color: '#00f0ff',
         fontStyle: 'bold',
         letterSpacing: 3,
       }).setOrigin(0.5);
 
-      const playContainer = this.add.container(GAME_WIDTH / 2, actionAreaY, [playBtnBg, playText]);
+      const playY = actionAreaY - 14;
+      const playContainer = this.add.container(GAME_WIDTH / 2, playY, [playBtnBg, playText]);
       this.tweens.add({
         targets: playContainer,
-        scaleX: 1.04,
-        scaleY: 1.04,
+        scaleX: 1.035,
+        scaleY: 1.035,
         duration: 750,
         yoyo: true,
         repeat: -1,
@@ -552,22 +558,116 @@ export class BootScene extends Phaser.Scene {
       });
       startContainer.add(playContainer);
 
-      const playHit = this.add.rectangle(GAME_WIDTH / 2, actionAreaY, playBtnW, playBtnH, 0x000000, 0).setInteractive({ useHandCursor: true });
+      const playHit = this.add.rectangle(GAME_WIDTH / 2, playY, playBtnW, playBtnH, 0x000000, 0).setInteractive({ useHandCursor: true });
       playHit.on('pointerdown', () => {
         this._startGame(null, selectedDifficulty);
       });
       startContainer.add(playHit);
 
-      const subHint = this.add.text(GAME_WIDTH / 2, actionAreaY + 68, 'Guided first shot • Aim assist enabled', {
+      const subHint = this.add.text(GAME_WIDTH / 2, playY + 48, 'Guided first shot • Aim assist enabled', {
         fontFamily: 'sans-serif',
-        fontSize: '15px',
+        fontSize: '14px',
         color: '#7188b8',
       }).setOrigin(0.5);
       startContainer.add(subHint);
     }
 
+    // --- Button 3: REWARDED AD BONUS (Instant access for players & QA test runners) ---
+    const bonusBtnY = hasSavedRun ? actionAreaY + 114 : actionAreaY + 98;
+    const bonusBtnW = 580;
+    const bonusBtnH = 54;
+
+    const bonusBg = this.add.graphics();
+    const renderBonusBg = (borderCol = 0xffea00, bgAlpha = 0.12) => {
+      bonusBg.clear();
+      bonusBg.fillStyle(0x0a0f24, 0.95);
+      bonusBg.fillRoundedRect(-bonusBtnW / 2, -bonusBtnH / 2, bonusBtnW, bonusBtnH, 16);
+      bonusBg.fillStyle(borderCol, bgAlpha);
+      bonusBg.fillRoundedRect(-bonusBtnW / 2, -bonusBtnH / 2, bonusBtnW, bonusBtnH, 16);
+      bonusBg.lineStyle(2, borderCol, 0.95);
+      bonusBg.strokeRoundedRect(-bonusBtnW / 2, -bonusBtnH / 2, bonusBtnW, bonusBtnH, 16);
+    };
+    renderBonusBg(0xffea00, 0.12);
+
+    const bonusText = this.add.text(0, 0, '★ DAILY BONUS: +100 ¢ (WATCH AD)', {
+      fontFamily: '"Arial Black", sans-serif',
+      fontSize: '17px',
+      color: '#ffea00',
+      letterSpacing: 1.5,
+    }).setOrigin(0.5);
+
+    const bonusContainer = this.add.container(GAME_WIDTH / 2, bonusBtnY, [bonusBg, bonusText]);
+    startContainer.add(bonusContainer);
+
+    const bonusHit = this.add.rectangle(GAME_WIDTH / 2, bonusBtnY, bonusBtnW, bonusBtnH, 0x000000, 0)
+      .setInteractive({ useHandCursor: true });
+    startContainer.add(bonusHit);
+
+    let isBonusAdLoading = false;
+    bonusHit.on('pointerdown', async () => {
+      if (isBonusAdLoading) return;
+      isBonusAdLoading = true;
+
+      try {
+        this.sound.play(AUDIO_KEYS.SWAP, { volume: 0.4 });
+      } catch (_) {}
+
+      bonusText.setText('▶ OPENING SPONSOR AD...');
+      bonusText.setColor('#00f0ff');
+      renderBonusBg(0x00f0ff, 0.25);
+
+      const isRewarded = await playgamaService.showRewarded('bonus');
+
+      if (isRewarded) {
+        // Full completion: Award 100 coins
+        const currentData = savedData || {};
+        currentData.coins = (Number(currentData.coins) || 0) + 100;
+        await playgamaService.saveData(currentData);
+
+        bonusText.setText('✓ +100 ¢ BONUS CLAIMED!');
+        bonusText.setColor('#39ff14');
+        renderBonusBg(0x39ff14, 0.25);
+
+        try {
+          this.sound.play(AUDIO_KEYS.POWERUP, { volume: 0.85 });
+        } catch (_) {}
+
+        // Floating reward toast
+        const toast = this.add.text(GAME_WIDTH / 2, bonusBtnY - 45, '+100 COINS ADDED!', {
+          fontFamily: '"Arial Black", sans-serif',
+          fontSize: '22px',
+          color: '#ffea00',
+        }).setOrigin(0.5);
+        startContainer.add(toast);
+
+        this.tweens.add({
+          targets: toast,
+          y: bonusBtnY - 85,
+          alpha: 0,
+          duration: 1400,
+          onComplete: () => toast.destroy(),
+        });
+      } else {
+        // Early close or failed: Strictly NO reward granted!
+        bonusText.setText('✕ AD CLOSED EARLY (NO REWARD)');
+        bonusText.setColor('#ff005d');
+        renderBonusBg(0xff005d, 0.25);
+
+        try {
+          this.sound.play(AUDIO_KEYS.WARN, { volume: 0.5 });
+        } catch (_) {}
+
+        this.time.delayedCall(2500, () => {
+          bonusText.setText('★ DAILY BONUS: +100 ¢ (WATCH AD)');
+          bonusText.setColor('#ffea00');
+          renderBonusBg(0xffea00, 0.12);
+          isBonusAdLoading = false;
+        });
+      }
+    });
+
     // --- Footer Note ---
-    const footerText = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 38, 'Audio & controls calibrate automatically on tap', {
+    const footerText = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 28, 'Audio & controls calibrate automatically on tap', {
       fontFamily: 'sans-serif',
       fontSize: '13px',
       color: '#425178',
