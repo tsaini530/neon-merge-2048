@@ -190,5 +190,5 @@ export const POWERUP_COSTS = {
   WILDCARD: 450,
   ROW_CLEAR: 600,
   REVIVE: 500,
-  SWAP: 100,
+  SWAP: 20,
 };

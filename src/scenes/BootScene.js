@@ -99,9 +99,20 @@ export class BootScene extends Phaser.Scene {
     this._generateGridTextures();
 
     // Fetch saved player progress from Cloud Storage (Required by Playgama before gameplay starts)
-    let savedData = await playgamaService.loadData();
-    if (!savedData) {
-      savedData = await ytService.loadData();
+    let savedData = null;
+    try {
+      savedData = await Promise.race([
+        playgamaService.loadData(),
+        new Promise((resolve) => setTimeout(() => resolve(null), 1500))
+      ]);
+      if (!savedData) {
+        savedData = await Promise.race([
+          ytService.loadData(),
+          new Promise((resolve) => setTimeout(() => resolve(null), 1000))
+        ]);
+      }
+    } catch (e) {
+      console.warn('[BootScene] Storage load fallback:', e);
     }
 
     console.log('[BootScene] Preloaded saved progress:', savedData);

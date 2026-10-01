@@ -13,6 +13,7 @@ import {
   AUDIO_KEYS,
   ANIMATION,
   WILDCARD_VALUE,
+  POWERUP_COSTS,
 } from '../config/constants.js';
 import { GameSettings } from '../config/gameSettings.js';
 import Block from './Block.js';
@@ -67,6 +68,7 @@ export class Shooter extends Phaser.GameObjects.Container {
 
     // 6. Match Prediction Tag Badge ("★ MERGE!")
     this.matchBadge = this.scene.add.container(0, 0);
+    this.matchBadge.setDepth(35);
     const badgeBg = this.scene.add.graphics();
     badgeBg.fillStyle(0x0a2f15, 0.95);
     badgeBg.lineStyle(2, 0x39ff14, 0.95);
@@ -82,7 +84,6 @@ export class Shooter extends Phaser.GameObjects.Container {
     }).setOrigin(0.5);
     this.matchBadge.add(this.matchBadgeText);
     this.matchBadge.setVisible(false);
-    this.add(this.matchBadge);
 
     // 7. Tactical Bottom Dock (Next Tile, Swap Button & Hammer Tool)
     this._createBottomDock();
@@ -187,21 +188,22 @@ export class Shooter extends Phaser.GameObjects.Container {
     // 2. SWAP Button Section (Center of dock, X = 0)
     this.swapBtn = this.scene.add.container(0, 0);
 
-    const swapBg = this.scene.add.graphics();
-    swapBg.fillStyle(0x131938, 0.95);
-    swapBg.lineStyle(2, 0x00f0ff, 0.85);
-    swapBg.fillRoundedRect(-65, -19, 130, 38, 12);
-    swapBg.strokeRoundedRect(-65, -19, 130, 38, 12);
-    this.swapBtn.add(swapBg);
+    this.swapBg = this.scene.add.graphics();
+    this.swapBg.fillStyle(0x131938, 0.95);
+    this.swapBg.lineStyle(2, 0x00f0ff, 0.85);
+    this.swapBg.fillRoundedRect(-65, -19, 130, 38, 12);
+    this.swapBg.strokeRoundedRect(-65, -19, 130, 38, 12);
+    this.swapBtn.add(this.swapBg);
 
-    const swapText = this.scene.add.text(0, 0, '⇄ SWAP', {
+    const swapCost = this.scene.diffConfig?.swapCost || POWERUP_COSTS.SWAP || 20;
+    this.swapText = this.scene.add.text(0, 0, `⇄ SWAP ${swapCost}¢`, {
       fontFamily: '"Arial Black", sans-serif',
-      fontSize: '15px',
+      fontSize: '13px',
       color: '#00f0ff',
       fontStyle: 'bold',
-      letterSpacing: 1,
+      letterSpacing: 0.5,
     }).setOrigin(0.5);
-    this.swapBtn.add(swapText);
+    this.swapBtn.add(this.swapText);
 
     this.swapBtn.setSize(130, 38);
     this.swapBtn.setInteractive(
@@ -285,6 +287,12 @@ export class Shooter extends Phaser.GameObjects.Container {
     this.hammerBadge.setVisible(count > 0);
   }
 
+  updateSwapCost(cost) {
+    if (this.swapText) {
+      this.swapText.setText(`⇄ SWAP ${cost}¢`);
+    }
+  }
+
   /**
    * Initialize blocks in shooter slots
    * @param {number} maxBoardValue 
@@ -303,8 +311,8 @@ export class Shooter extends Phaser.GameObjects.Container {
       this.ghostBlock = null;
     }
 
-    let val1 = GameSettings.getRandomBlockValue(maxBoardValue);
-    let val2 = GameSettings.getRandomBlockValue(maxBoardValue);
+    let val1 = GameSettings.getRandomBlockValue(maxBoardValue, this.scene.diffConfig, this.gridManager);
+    let val2 = GameSettings.getRandomBlockValue(maxBoardValue, this.scene.diffConfig, this.gridManager);
 
     // First shot guaranteed hook: match the 4 in center column
     if (this.scene.score === 0) {
@@ -319,7 +327,8 @@ export class Shooter extends Phaser.GameObjects.Container {
 
     // Current block inside active launcher carriage
     this.currentBlock = new Block(this.scene, initialX, SHOOTER_Y, val1);
-    this.currentBlock.spawnPop();
+    this.currentBlock.setScale(1);
+    this.currentBlock.setDepth(25);
 
     // Next block inside bottom dock
     this.nextBlock = new Block(this.scene, 0, 0, val2);
@@ -334,7 +343,7 @@ export class Shooter extends Phaser.GameObjects.Container {
       this.swapBlocks();
     });
 
-    this.setAimColumn(2);
+    this.setAimColumn(2, true);
   }
 
   /**
@@ -466,7 +475,9 @@ export class Shooter extends Phaser.GameObjects.Container {
     this.laserBeam.strokePath();
 
     // 3. Connect energy links to matching neighbor blocks
-    if (hasMatches) {
+    const hideBadge = this.scene.diffConfig?.hidePredictionBadge;
+
+    if (hasMatches && !hideBadge) {
       this.matchLinkGraphics.lineStyle(3, 0x39ff14, 0.8);
       for (const m of matches) {
         this.matchLinkGraphics.beginPath();
@@ -491,10 +502,12 @@ export class Shooter extends Phaser.GameObjects.Container {
       }
       this.ghostBlock = new Block(this.scene, targetPos.x, targetPos.y, this.currentBlock.value);
       this.ghostBlock.setAsGhost(0.42);
+      this.ghostBlock.setDepth(14);
     } else {
       this.ghostBlock.setPosition(targetPos.x, targetPos.y);
       this.ghostBlock.setValue(this.currentBlock.value);
       this.ghostBlock.setAsGhost(0.42);
+      this.ghostBlock.setDepth(14);
       this.ghostBlock.setVisible(true);
     }
   }
@@ -521,6 +534,12 @@ export class Shooter extends Phaser.GameObjects.Container {
    */
   swapBlocks() {
     if (this.isShooting || !this.currentBlock || !this.nextBlock) return;
+
+    // Check coin charge through scene handler
+    if (typeof this.scene.handleSwapRequest === 'function') {
+      const allowed = this.scene.handleSwapRequest();
+      if (!allowed) return;
+    }
 
     this.scene.events.emit('play-sound', AUDIO_KEYS.SWAP, { volume: 0.7 });
 
@@ -569,6 +588,40 @@ export class Shooter extends Phaser.GameObjects.Container {
         });
       },
     });
+  }
+
+  /**
+   * Visual feedback when player tries to swap without enough coins
+   */
+  highlightInsufficientCoins() {
+    this.scene.tweens.add({
+      targets: this.swapBtn,
+      x: { from: -7, to: 7 },
+      duration: 45,
+      yoyo: true,
+      repeat: 3,
+      onComplete: () => {
+        this.swapBtn.x = 0;
+      },
+    });
+
+    if (this.swapBg) {
+      this.swapBg.clear();
+      this.swapBg.fillStyle(0x38131d, 0.95);
+      this.swapBg.lineStyle(2, 0xff0055, 0.95);
+      this.swapBg.fillRoundedRect(-65, -19, 130, 38, 12);
+      this.swapBg.strokeRoundedRect(-65, -19, 130, 38, 12);
+
+      this.scene.time.delayedCall(400, () => {
+        if (this.swapBg) {
+          this.swapBg.clear();
+          this.swapBg.fillStyle(0x131938, 0.95);
+          this.swapBg.lineStyle(2, 0x00f0ff, 0.85);
+          this.swapBg.fillRoundedRect(-65, -19, 130, 38, 12);
+          this.swapBg.strokeRoundedRect(-65, -19, 130, 38, 12);
+        }
+      });
+    }
   }
 
   /**
@@ -658,6 +711,7 @@ export class Shooter extends Phaser.GameObjects.Container {
       nextVal
     );
     this.currentBlock.setScale(0.55);
+    this.currentBlock.setDepth(25);
 
     // Tween the new block gliding up from the dock into the sliding carriage
     this.scene.tweens.add({
@@ -672,7 +726,7 @@ export class Shooter extends Phaser.GameObjects.Container {
 
     // Spawn new next block in bottom dock
     const maxVal = this.gridManager.getMaxValue();
-    const newNextVal = GameSettings.getRandomBlockValue(maxVal);
+    const newNextVal = GameSettings.getRandomBlockValue(maxVal, this.scene.diffConfig, this.gridManager);
 
     this.nextBlock = new Block(this.scene, 40, 0, newNextVal);
     this.nextBlock.setScale(0.1);

@@ -35,4 +35,8 @@ ytService.bindGame(game);
 playgamaService.bindGame(game);
 playgamaService.init();
 
+if (typeof window !== 'undefined') {
+  window.game = game;
+}
+
 export default game;

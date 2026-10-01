@@ -26,7 +26,17 @@ class PlaygamaService {
     this.initPromise = (async () => {
       try {
         console.log('[PlaygamaBridge] Initializing Playgama Bridge SDK...');
-        await bridge.initialize();
+        const initAction = (typeof bridge !== 'undefined' && bridge && typeof bridge.initialize === 'function')
+          ? bridge.initialize()
+          : Promise.resolve();
+
+        await Promise.race([
+          initAction,
+          new Promise((resolve) => setTimeout(() => {
+            console.warn('[PlaygamaBridge] Initialization timed out (fallback mode)');
+            resolve();
+          }, 1500))
+        ]);
         this.isInitialized = true;
         console.log('[PlaygamaBridge] Initialized successfully. Platform:', bridge.platform?.id);
 
@@ -224,13 +234,19 @@ class PlaygamaService {
   async loadData() {
     try {
       if (!this.isInitialized && this.initPromise) {
-        await this.initPromise;
+        await Promise.race([
+          this.initPromise,
+          new Promise((resolve) => setTimeout(resolve, 1500))
+        ]);
       }
 
-      if (bridge.storage && typeof bridge.storage.get === 'function') {
+      if (typeof bridge !== 'undefined' && bridge && bridge.storage && typeof bridge.storage.get === 'function') {
         console.log('[PlaygamaBridge] Fetching saved progress from storage...');
         const keys = ['neon_merge_data', 'score', 'best_score', 'coins', 'level'];
-        const result = await bridge.storage.get(keys);
+        const result = await Promise.race([
+          bridge.storage.get(keys),
+          new Promise((resolve) => setTimeout(() => resolve(null), 1500))
+        ]);
         console.log('[PlaygamaBridge] Raw storage get result:', result);
 
         if (result && Array.isArray(result)) {

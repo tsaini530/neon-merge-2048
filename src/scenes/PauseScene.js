@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT, AUDIO_KEYS } from '../config/constants.js';
+import { formatScore } from '../utils/numberFormat.js';
 import ytService from '../sdk/ytService.js';
 
 export class PauseScene extends Phaser.Scene {
@@ -10,6 +11,7 @@ export class PauseScene extends Phaser.Scene {
   init(data) {
     this.score = data.score || 0;
     this.bestScore = data.bestScore || 0;
+    this.difficulty = data.difficulty || 'MEDIUM';
     this.isClosing = false;
   }
 
@@ -93,10 +95,10 @@ export class PauseScene extends Phaser.Scene {
     const statText = this.add.text(
       GAME_WIDTH / 2,
       centerY - 109,
-      `SCORE: ${this.score.toLocaleString()}   │   ★ BEST: ${this.bestScore.toLocaleString()}`,
+      `[${this.difficulty}] SCORE: ${formatScore(this.score)}   │   ★ BEST: ${formatScore(this.bestScore)}`,
       {
         fontFamily: '"Arial Black", sans-serif',
-        fontSize: '15px',
+        fontSize: '14px',
         color: '#ffea00',
         letterSpacing: 1,
         fontStyle: 'bold',

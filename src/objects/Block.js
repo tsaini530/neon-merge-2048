@@ -5,6 +5,7 @@ import {
   NEON_COLORS,
   DEFAULT_NEON,
 } from '../config/constants.js';
+import { formatTileNumber } from '../utils/numberFormat.js';
 
 export class Block extends Phaser.GameObjects.Container {
   /**
@@ -33,9 +34,10 @@ export class Block extends Phaser.GameObjects.Container {
     this.add(this.bgSprite);
 
     // Number text label
-    this.textLabel = scene.add.text(0, 0, `${value}`, {
+    const initialText = formatTileNumber(value);
+    this.textLabel = scene.add.text(0, 0, initialText, {
       fontFamily: '"Arial Black", "Impact", "Trebuchet MS", sans-serif',
-      fontSize: this._getFontSize(value),
+      fontSize: this._getFontSize(initialText),
       fontStyle: 'bold',
       color: '#ffffff',
       align: 'center',
@@ -44,14 +46,17 @@ export class Block extends Phaser.GameObjects.Container {
     this.add(this.textLabel);
 
     this.setSize(TILE_SIZE, TILE_SIZE);
+    this.setDepth(15);
     scene.add.existing(this);
 
     this.applyTheme();
   }
 
-  _getFontSize(val) {
-    if (val >= 1024) return '30px';
-    if (val >= 128) return '36px';
+  _getFontSize(formatted) {
+    const len = String(formatted).length;
+    if (len >= 5) return '26px';
+    if (len === 4) return '30px';
+    if (len === 3) return '36px';
     return '42px';
   }
 
@@ -68,8 +73,9 @@ export class Block extends Phaser.GameObjects.Container {
     }
 
     if (this.textLabel) {
-      this.textLabel.setText(`${this.value}`);
-      this.textLabel.setFontSize(this._getFontSize(this.value));
+      const formatted = formatTileNumber(this.value);
+      this.textLabel.setText(formatted);
+      this.textLabel.setFontSize(this._getFontSize(formatted));
       this.textLabel.setColor(theme.text);
     }
 
@@ -105,13 +111,13 @@ export class Block extends Phaser.GameObjects.Container {
    * Subtle spawn pop animation
    */
   spawnPop() {
-    this.setScale(0);
+    this.setScale(1);
     if (this.scene && this.scene.tweens) {
       this.scene.tweens.add({
         targets: this,
-        scaleX: 1,
-        scaleY: 1,
-        duration: 200,
+        scaleX: { from: 0.2, to: 1 },
+        scaleY: { from: 0.2, to: 1 },
+        duration: 180,
         ease: 'Back.easeOut',
       });
     }

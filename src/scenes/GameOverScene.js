@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT, AUDIO_KEYS, NEON_COLORS, POWERUP_COSTS } from '../config/constants.js';
+import { formatScore, formatTileNumber } from '../utils/numberFormat.js';
 import ytService from '../sdk/ytService.js';
 import playgamaService from '../sdk/playgamaService.js';
 
@@ -13,6 +14,7 @@ export class GameOverScene extends Phaser.Scene {
     this.bestScore = data.bestScore || 0;
     this.coins = data.coins || 0;
     this.highestTile = data.highestTile || 2;
+    this.difficulty = data.difficulty || 'MEDIUM';
     this.canRevive = data.canRevive !== false;
   }
 
@@ -87,16 +89,16 @@ export class GameOverScene extends Phaser.Scene {
     }).setOrigin(0.5);
     panel.add(scoreTag);
 
-    const scoreVal = this.add.text(0, -75, `${this.score.toLocaleString()}`, {
+    const scoreVal = this.add.text(0, -75, `${formatScore(this.score)}`, {
       fontFamily: '"Arial Black", sans-serif',
-      fontSize: '50px',
+      fontSize: '48px',
       color: '#00f0ff',
       fontStyle: 'bold',
     }).setOrigin(0.5);
     panel.add(scoreVal);
 
     // Best Score & High Record indicator
-    const bestText = isNewRecord ? '★ NEW BEST RECORD! ★' : `BEST: ${this.bestScore.toLocaleString()}`;
+    const bestText = isNewRecord ? '★ NEW BEST RECORD! ★' : `BEST: ${formatScore(this.bestScore)}`;
     const bestColor = isNewRecord ? '#ffe600' : '#8da2d4';
 
     const bestVal = this.add.text(0, -15, bestText, {
@@ -119,12 +121,12 @@ export class GameOverScene extends Phaser.Scene {
       });
     }
 
-    // Highest Tile Badge
-    const tileTag = this.add.text(0, 35, `MAX TILE: ${this.highestTile}`, {
+    // Highest Tile Badge with Difficulty tag
+    const tileTag = this.add.text(0, 35, `[${this.difficulty}] MAX TILE: ${formatTileNumber(this.highestTile)}`, {
       fontFamily: '"Arial Black", sans-serif',
-      fontSize: '16px',
+      fontSize: '15px',
       color: '#39ff14',
-      letterSpacing: 2,
+      letterSpacing: 1.5,
     }).setOrigin(0.5);
     panel.add(tileTag);
 

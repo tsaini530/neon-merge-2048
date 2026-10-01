@@ -39,15 +39,15 @@ export class GridManager {
   /**
    * Populate starting board with 2 or 3 top rows
    */
-  initStartingBoard() {
+  initStartingBoard(diffConfig = null) {
     this.clear();
-    const initialRows = 3;
-    const initialValues = [2, 4, 8, 16, 32];
+    const initialRows = diffConfig?.initialRows || 4;
+    const initialValues = diffConfig?.initialValues || [2, 4, 8, 16, 32];
 
     for (let r = 0; r < initialRows; r++) {
       for (let c = 0; c < GRID_COLS; c++) {
-        // Leave a couple random empty gaps for interesting puzzle setup
-        if (r === 2 && Math.random() < 0.35) continue;
+        // Leave gaps on bottom-most starting row for interesting layout
+        if (r === initialRows - 1 && Math.random() < 0.35) continue;
 
         let val = initialValues[Math.floor(Math.random() * initialValues.length)];
         // Guarantee column 2 has a 4 for the initial first merge hook
@@ -67,6 +67,65 @@ export class GridManager {
     if (landingRow > 0 && this.grid[landingRow - 1][2]) {
       this.grid[landingRow - 1][2].setValue(4);
     }
+  }
+
+  /**
+   * Push all blocks down by 1 row and spawn a new row at row 0 (Row drop mechanic)
+   * @param {object} [diffConfig] 
+   * @returns {Promise<{isOverflow: boolean}>}
+   */
+  async pushRowDown(diffConfig = null) {
+    const movePromises = [];
+    let isOverflow = false;
+
+    // 1. Check if any blocks in row 7 will overflow beyond danger line
+    for (let c = 0; c < GRID_COLS; c++) {
+      if (this.grid[GRID_ROWS - 1][c] !== null) {
+        isOverflow = true;
+        this.grid[GRID_ROWS - 1][c].destroy();
+        this.grid[GRID_ROWS - 1][c] = null;
+      }
+    }
+
+    // 2. Shift all rows down from bottom to top
+    for (let r = GRID_ROWS - 1; r > 0; r--) {
+      for (let c = 0; c < GRID_COLS; c++) {
+        const block = this.grid[r - 1][c];
+        this.grid[r][c] = block;
+        if (block) {
+          block.row = r;
+          const pos = GameSettings.getCellPosition(c, r);
+          movePromises.push(block.moveTo(pos.x, pos.y, ANIMATION.DROP_DURATION));
+        }
+      }
+    }
+
+    // 3. Clear row 0
+    for (let c = 0; c < GRID_COLS; c++) {
+      this.grid[0][c] = null;
+    }
+
+    // Wait for shift animation
+    if (movePromises.length > 0) {
+      await Promise.all(movePromises);
+    }
+
+    // 4. Spawn new row at row 0
+    const pool = diffConfig?.initialValues || [2, 4, 8, 16];
+    for (let c = 0; c < GRID_COLS; c++) {
+      // 25% chance of empty gap in new row for tactical breathing room
+      if (Math.random() < 0.25) continue;
+
+      const val = pool[Math.floor(Math.random() * pool.length)];
+      const pos = GameSettings.getCellPosition(c, 0);
+      const newBlock = new Block(this.scene, pos.x, pos.y, val);
+      newBlock.col = c;
+      newBlock.row = 0;
+      newBlock.spawnPop();
+      this.grid[0][c] = newBlock;
+    }
+
+    return { isOverflow };
   }
 
   /**
